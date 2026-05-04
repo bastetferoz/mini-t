@@ -7,8 +7,13 @@ use Filament\Resources\Pages\ViewRecord;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\CheckboxList;
-use Illuminate\Support\HtmlString;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Hidden;
+use Illuminate\Support\HtmlString;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Toggle;
 
 class ViewPerson extends ViewRecord
 {
@@ -47,7 +52,6 @@ class ViewPerson extends ViewRecord
 
                 ->action(function ($record) {
 
-                    // 🔥 SOLO PASAMOS LOS EQUIPOS A EN TRANSITO
                     foreach ($record->assignments as $assignment) {
 
                         \App\Models\Asset::where('id', $assignment->asset_id)
@@ -56,8 +60,6 @@ class ViewPerson extends ViewRecord
                             ]);
                     }
 
-                    // 🔥 OPCIONAL (recomendado)
-                    // estado intermedio
                     $record->update([
                         'status' => 'offboarding'
                     ]);
@@ -78,32 +80,61 @@ class ViewPerson extends ViewRecord
 
                 ->form([
 
-                    CheckboxList::make('assets')
-                        ->label('Equipos que volvieron')
-                        ->options(fn ($record) =>
-                            $record->assignments
-                                ->filter(fn ($a) => $a->asset->status === 'in_transit')
-                                ->mapWithKeys(fn ($a) => [
-                                    $a->asset->id =>
-                                        "{$a->asset->device} - {$a->asset->serial}"
-                                ])
-                        ),
+    Repeater::make('assets')
+        ->label('Recepción de equipos')
+        ->schema([
 
-                    Select::make('motivo')
-                        ->label('Motivo de los no devueltos')
-                        ->options([
-                            'ausente' => 'Ausente',
-                            'roto' => 'Roto',
-                            'incompleto' => 'Incompleto',
-                        ])
-                        ->required()
+            Hidden::make('asset_id'),
 
+            Placeholder::make('equipo')
+                ->label('Equipo')
+                ->content(fn ($get) =>
+                    optional(\App\Models\Asset::find($get('asset_id')))
+                        ?->device . ' - ' .
+                    optional(\App\Models\Asset::find($get('asset_id')))
+                        ?->serial
+                ),
+
+            Toggle::make('devuelto')
+                ->label('¿Devuelto?')
+                ->reactive(),
+
+            Select::make('motivo')
+                ->label('Motivo')
+                ->options([
+                    'ausente' => 'Ausente',
+                    'roto' => 'Roto',
+                    'incompleto' => 'Incompleto',
                 ])
+                ->visible(fn ($get) => !$get('devuelto')) // 🔥 clave
+                ->nullable(),
+
+            Textarea::make('comentario')
+                ->label('Comentario')
+                ->rows(2)
+                ->visible(fn ($get) => !$get('devuelto')) // 🔥 clave
+                ->nullable(),
+
+        ])
+
+        ->default(fn ($record) =>
+            $record->assignments
+                ->filter(fn ($a) => $a->asset->status === 'in_transit')
+                ->map(fn ($a) => [
+                    'asset_id' => $a->asset->id,
+                    'devuelto' => false,
+                ])
+                ->values()
+                ->toArray()
+        )
+])
 
                 ->action(function ($record, $data) {
 
                     $selected = $data['assets'] ?? [];
-                    $motivo = $data['motivo'] ?? 'sin especificar';
+
+                    $noDevueltos = collect($data['no_devueltos'] ?? [])
+                        ->keyBy('asset_id');
 
                     foreach ($record->assignments as $assignment) {
 
@@ -129,6 +160,11 @@ class ViewPerson extends ViewRecord
                         } else {
 
                             // ❌ NO DEVUELTO
+                            $item = $noDevueltos[$asset->id] ?? null;
+
+                            $motivo = $item['motivo'] ?? 'sin especificar';
+                            $comentario = $item['comentario'] ?? '';
+
                             $asset->update([
                                 'status' => 'retired'
                             ]);
@@ -136,12 +172,11 @@ class ViewPerson extends ViewRecord
                             \App\Models\AssetHistory::create([
                                 'asset_id' => $asset->id,
                                 'action' => 'No devuelto',
-                                'notes' => $motivo, // 👈 más limpio
+                                'notes' => trim($motivo . ' ' . $comentario),
                             ]);
                         }
                     }
 
-                    // 🔥 RECIÉN ACÁ SE COMPLETA LA BAJA
                     $record->update([
                         'status' => 'inactive'
                     ]);
