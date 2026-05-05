@@ -131,56 +131,46 @@ class ViewPerson extends ViewRecord
 
                 ->action(function ($record, $data) {
 
-                    $selected = $data['assets'] ?? [];
+    $assets = $data['assets'] ?? [];
 
-                    $noDevueltos = collect($data['no_devueltos'] ?? [])
-                        ->keyBy('asset_id');
+    foreach ($assets as $item) {
 
-                    foreach ($record->assignments as $assignment) {
+        $asset = \App\Models\Asset::find($item['asset_id']);
 
-                        $asset = $assignment->asset;
+        if (!$asset || $asset->status !== 'in_transit') {
+            continue;
+        }
 
-                        if ($asset->status !== 'in_transit') {
-                            continue;
-                        }
+        if ($item['devuelto']) {
 
-                        if (in_array($asset->id, $selected)) {
+            // ✔ DEVUELTO
+            $asset->update(['status' => 'available']);
 
-                            // ✔ DEVUELTO
-                            $asset->update([
-                                'status' => 'available'
-                            ]);
+            \App\Models\AssetHistory::create([
+                'asset_id' => $asset->id,
+                'action'   => 'Devuelto',
+                'notes'    => 'Ex ' . $record->name,
+            ]);
 
-                            \App\Models\AssetHistory::create([
-                                'asset_id' => $asset->id,
-                                'action' => 'Devuelto',
-                                'notes' => 'Ex ' . $record->name,
-                            ]);
+        } else {
 
-                        } else {
+            // ❌ NO DEVUELTO
+            $motivo     = $item['motivo'] ?? 'sin especificar';
+            $comentario = $item['comentario'] ?? '';
 
-                            // ❌ NO DEVUELTO
-                            $item = $noDevueltos[$asset->id] ?? null;
+            $asset->update(['status' => 'retired']);
 
-                            $motivo = $item['motivo'] ?? 'sin especificar';
-                            $comentario = $item['comentario'] ?? '';
+           \App\Models\AssetHistory::create([
+    'asset_id'  => $asset->id,
+    'person_id' => $record->id,
+    'action'    => 'No devuelto',
+    'notes'     => trim($motivo . ($comentario ? ' - ' . $comentario : '')),
+]);
+        }
+    }
 
-                            $asset->update([
-                                'status' => 'retired'
-                            ]);
-
-                            \App\Models\AssetHistory::create([
-                                'asset_id' => $asset->id,
-                                'action' => 'No devuelto',
-                                'notes' => trim($motivo . ' ' . $comentario),
-                            ]);
-                        }
-                    }
-
-                    $record->update([
-                        'status' => 'inactive'
-                    ]);
-                }),
+    $record->update(['status' => 'inactive']);
+}),
         ];
     }
 }

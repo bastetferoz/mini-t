@@ -56,7 +56,13 @@ class ListAssets extends ListRecords
 
                     // 🔥 leer encabezado
                     $header = fgetcsv($file, 0, $delimiter);
-                    $header = array_map(fn ($h) => strtolower(trim($h)), $header);
+
+// 🔥 fix BOM (Excel/Sheets agrega caracteres invisibles al inicio)
+if ($header && isset($header[0])) {
+    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+}
+
+$header = array_map(fn ($h) => strtolower(trim($h)), $header);
 
                     while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
 

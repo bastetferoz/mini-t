@@ -36,7 +36,7 @@ class AssetsTable
     })
     ->colors([
         'success' => fn ($state) => $state === 'available',
-        'primary' => fn ($state) => $state === 'assigned',
+        'info' => fn ($state) => $state === 'assigned',
         'warning' => fn ($state) => $state === 'in_return',
         'danger' => fn ($state) => $state === 'retired',
     ]),

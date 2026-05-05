@@ -10,7 +10,7 @@ class Asset extends Model
         'device',
         'brand',
         'model',
-        'processor',
+        'cpu',
         'ram',
         'disk',
         'wireless_mouse',
