@@ -16,7 +16,7 @@ return new class extends Migration
         $table->string('device'); // Dispositivo
         $table->string('brand')->nullable(); // Marca
         $table->string('model')->nullable(); // Modelo
-        $table->string('processor')->nullable(); // CPU
+        $table->string('cpu')->nullable(); // CPU
         $table->string('ram')->nullable(); // Memoria
         $table->string('disk')->nullable(); // Disco
         $table->boolean('wireless_mouse')->default(false); // Mouse

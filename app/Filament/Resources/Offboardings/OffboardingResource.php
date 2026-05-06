@@ -13,6 +13,8 @@ class OffboardingResource extends Resource
 
     // ✅ tipo correcto
     protected static ?string $navigationLabel = 'Bajas';
+    protected static ?int $navigationSort = 10; // 🔥 lo empuja hacia abajo
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrow-left-start-on-rectangle';
 
     public static function getEloquentQuery(): Builder
     {

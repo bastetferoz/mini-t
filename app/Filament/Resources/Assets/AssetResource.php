@@ -24,6 +24,12 @@ class AssetResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    public static function canViewAny(): bool
+{
+    return auth()->user()->hasRole('admin') ||
+           auth()->user()->hasRole('it');
+}
+
     public static function form(Schema $schema): Schema
     {
         return AssetForm::configure($schema);

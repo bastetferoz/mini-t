@@ -24,7 +24,11 @@ class ViewPerson extends ViewRecord
         return [
 
             // ✏️ EDITAR
-            EditAction::make(),
+            EditAction::make()
+                ->visible(fn () =>
+                 auth()->user()->hasRole('admin') ||
+                 auth()->user()->hasRole('it')
+    ),
 
             // 🔴 SOLICITAR BAJA
             Action::make('baja')

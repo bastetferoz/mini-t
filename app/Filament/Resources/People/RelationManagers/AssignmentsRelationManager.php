@@ -109,7 +109,10 @@ class AssignmentsRelationManager extends RelationManager
                 Action::make('desasignar')
                 
                     ->label('Desasignar')
-                    ->visible(fn () => true)
+                    ->visible(fn () =>
+                 auth()->user()->hasRole('admin') ||
+                 auth()->user()->hasRole('it')
+    )
                     ->color('warning')
                     ->form([
                         Select::make('reason')
@@ -147,7 +150,10 @@ class AssignmentsRelationManager extends RelationManager
                 // 🔵 REEMPLAZAR
                 Action::make('reemplazar')
                     ->label('Reemplazar')
-                    ->visible(fn () => true)
+                    ->visible(fn () =>
+                 auth()->user()->hasRole('admin') ||
+                 auth()->user()->hasRole('it')
+    )
                     ->color('primary')
                     ->form([
 

@@ -20,10 +20,20 @@ class ListPeople extends ListRecords
 
             // 🟢 BOTÓN ALTA
             CreateAction::make()
+            ->visible(fn () =>
+        auth()->user()->hasRole('admin') ||
+        auth()->user()->hasRole('it')
+    )
+            
                 ->label('Alta'),
 
             // 🔵 BOTÓN IMPORTAR
             Action::make('import')
+            ->visible(fn () =>
+        auth()->user()->hasRole('admin') ||
+        auth()->user()->hasRole('it')
+    )
+            
                 ->label('Importar')
                 ->icon('heroicon-o-arrow-up-tray')
 
