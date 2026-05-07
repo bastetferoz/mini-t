@@ -26,9 +26,9 @@ class ViewPerson extends ViewRecord
             // ✏️ EDITAR
             EditAction::make()
                 ->visible(fn () =>
-                 auth()->user()->hasRole('admin') ||
-                 auth()->user()->hasRole('it')
-    ),
+                    auth()->user()->hasRole('admin') ||
+                    auth()->user()->hasRole('it')
+                ),
 
             // 🔴 SOLICITAR BAJA
             Action::make('baja')
@@ -56,17 +56,20 @@ class ViewPerson extends ViewRecord
 
                 ->action(function ($record) {
 
-                    foreach ($record->assignments as $assignment) {
+                    $assignments = $record->assignments()->whereNull('deleted_at')->get();
 
-                        \App\Models\Asset::where('id', $assignment->asset_id)
-                            ->update([
-                                'status' => 'in_transit'
-                            ]);
+                    // 🔥 guardar asset_ids antes de borrar
+                    $assetIds = $assignments->pluck('asset_id');
+
+                    foreach ($assetIds as $assetId) {
+                        \App\Models\Asset::where('id', $assetId)
+                            ->update(['status' => 'in_transit']);
                     }
 
-                    $record->update([
-                        'status' => 'offboarding'
-                    ]);
+                    // 🔥 borrar assignments DESPUÉS de actualizar assets
+                    $record->assignments()->delete();
+
+                    $record->update(['status' => 'offboarding']);
                 }),
 
             // 🟢 REGISTRAR RECEPCIÓN
@@ -84,97 +87,99 @@ class ViewPerson extends ViewRecord
 
                 ->form([
 
-    Repeater::make('assets')
-        ->label('Recepción de equipos')
-        ->schema([
+                    Repeater::make('assets')
+                        ->label('Recepción de equipos')
+                        ->schema([
 
-            Hidden::make('asset_id'),
+                            Hidden::make('asset_id'),
 
-            Placeholder::make('equipo')
-                ->label('Equipo')
-                ->content(fn ($get) =>
-                    optional(\App\Models\Asset::find($get('asset_id')))
-                        ?->device . ' - ' .
-                    optional(\App\Models\Asset::find($get('asset_id')))
-                        ?->serial
-                ),
+                            Placeholder::make('equipo')
+                                ->label('Equipo')
+                                ->content(fn ($get) =>
+                                    optional(\App\Models\Asset::find($get('asset_id')))
+                                        ?->device . ' - ' .
+                                    optional(\App\Models\Asset::find($get('asset_id')))
+                                        ?->serial
+                                ),
 
-            Toggle::make('devuelto')
-                ->label('¿Devuelto?')
-                ->reactive(),
+                            Toggle::make('devuelto')
+                                ->label('¿Devuelto?')
+                                ->reactive(),
 
-            Select::make('motivo')
-                ->label('Motivo')
-                ->options([
-                    'ausente' => 'Ausente',
-                    'roto' => 'Roto',
-                    'incompleto' => 'Incompleto',
+                            Select::make('motivo')
+                                ->label('Motivo')
+                                ->options([
+                                    'ausente' => 'Ausente',
+                                    'roto' => 'Roto',
+                                    'incompleto' => 'Incompleto',
+                                ])
+                                ->visible(fn ($get) => !$get('devuelto'))
+                                ->nullable(),
+
+                            Textarea::make('comentario')
+                                ->label('Comentario')
+                                ->rows(2)
+                                ->visible(fn ($get) => !$get('devuelto'))
+                                ->nullable(),
+
+                        ])
+
+                        ->default(fn ($record) =>
+                            \App\Models\Asset::where('status', 'in_transit')
+                                ->whereHas('assignments', fn($q) => $q->where('person_id', $record->id)->withTrashed())
+                                ->get()
+                                ->map(fn ($a) => [
+                                    'asset_id' => $a->id,
+                                    'devuelto' => false,
+                                ])
+                                ->values()
+                                ->toArray()
+                        )
                 ])
-                ->visible(fn ($get) => !$get('devuelto')) // 🔥 clave
-                ->nullable(),
-
-            Textarea::make('comentario')
-                ->label('Comentario')
-                ->rows(2)
-                ->visible(fn ($get) => !$get('devuelto')) // 🔥 clave
-                ->nullable(),
-
-        ])
-
-        ->default(fn ($record) =>
-            $record->assignments
-                ->filter(fn ($a) => $a->asset->status === 'in_transit')
-                ->map(fn ($a) => [
-                    'asset_id' => $a->asset->id,
-                    'devuelto' => false,
-                ])
-                ->values()
-                ->toArray()
-        )
-])
 
                 ->action(function ($record, $data) {
 
-    $assets = $data['assets'] ?? [];
+                    $assets = $data['assets'] ?? [];
 
-    foreach ($assets as $item) {
+                    foreach ($assets as $item) {
 
-        $asset = \App\Models\Asset::find($item['asset_id']);
+                        $asset = \App\Models\Asset::find($item['asset_id']);
 
-        if (!$asset || $asset->status !== 'in_transit') {
-            continue;
-        }
+                        if (!$asset || $asset->status !== 'in_transit') {
+                            continue;
+                        }
 
-        if ($item['devuelto']) {
+                        if ($item['devuelto']) {
 
-            // ✔ DEVUELTO
-            $asset->update(['status' => 'available']);
+                            // ✔ DEVUELTO
+                            $asset->update(['status' => 'available']);
 
-            \App\Models\AssetHistory::create([
-                'asset_id' => $asset->id,
-                'action'   => 'Devuelto',
-                'notes'    => 'Ex ' . $record->name,
-            ]);
-
-        } else {
-
-            // ❌ NO DEVUELTO
-            $motivo     = $item['motivo'] ?? 'sin especificar';
-            $comentario = $item['comentario'] ?? '';
-
-            $asset->update(['status' => 'retired']);
-
-           \App\Models\AssetHistory::create([
+                            \App\Models\AssetHistory::create([
     'asset_id'  => $asset->id,
     'person_id' => $record->id,
-    'action'    => 'No devuelto',
-    'notes'     => trim($motivo . ($comentario ? ' - ' . $comentario : '')),
+    'action'    => 'Devuelto',
+    'notes'     => 'Ex ' . $record->name,
 ]);
-        }
-    }
 
-    $record->update(['status' => 'inactive']);
-}),
+                        } else {
+
+                            // ❌ NO DEVUELTO
+                            $motivo     = $item['motivo'] ?? 'sin especificar';
+                            $comentario = $item['comentario'] ?? '';
+
+                            $asset->update(['status' => 'retired']);
+
+                            \App\Models\AssetHistory::create([
+                                'asset_id'  => $asset->id,
+                                'person_id' => $record->id,
+                                'action'    => 'No devuelto',
+                                'notes'     => trim($motivo . ($comentario ? ' - ' . $comentario : '')),
+                            ]);
+                        }
+                    }
+
+                    $record->update(['status' => 'inactive']);
+                }),
         ];
     }
 }

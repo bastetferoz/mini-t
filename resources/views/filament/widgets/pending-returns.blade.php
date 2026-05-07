@@ -9,37 +9,36 @@
 
             @php
                 $personId = optional($assets->first()->assignments->first())->person_id;
+                $url = \App\Filament\Resources\People\PersonResource::getUrl('view', ['record' => $personId]);
+                $dias = $this->getDias($assets);
             @endphp
 
-            <div class="mb-4 p-4 rounded bg-gray-800 border border-red-500">
+            <x-filament::card class="mb-4 border border-red-500">
 
-                <div class="flex justify-between items-center mb-2">
+                <div class="flex justify-between items-center mb-3">
 
-                    <!-- 👤 NOMBRE CLICKABLE -->
-                    <a
-                        href="{{ \App\Filament\Resources\People\PersonResource::getUrl('view', ['record' => $personId]) }}"
-                        class="text-yellow-400 font-semibold hover:underline"
-                    >
+                    <a href="{{ $url }}" class="text-yellow-400 font-semibold hover:underline">
                         👤 {{ $person }}
                     </a>
 
-                    <!-- 🔥 BOTÓN PROCESAR -->
-                    <a
-                        href="{{ \App\Filament\Resources\People\PersonResource::getUrl('view', ['record' => $personId]) }}"
-                        class="text-xs bg-green-600 px-2 py-1 rounded hover:bg-green-500"
-                    >
-                        Procesar
-                    </a>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm {{ $dias >= 7 ? 'text-red-400' : 'text-gray-400' }}">
+                            ⏱ {{ $dias }} {{ $dias === 1 ? 'día' : 'días' }}
+                        </span>
+                        <a href="{{ $url }}" class="text-xs bg-green-600 px-2 py-1 rounded hover:bg-green-500">
+                            Procesar
+                        </a>
+                    </div>
 
                 </div>
 
-                <ul class="text-sm">
+                <ul class="text-sm space-y-1 border-t border-gray-600 pt-2">
                     @foreach ($assets as $asset)
-                        <li>• {{ $asset->device }} - {{ $asset->brand }}</li>
+                        <li class="text-gray-300">• {{ $asset->device }} - {{ $asset->brand }}</li>
                     @endforeach
                 </ul>
 
-            </div>
+            </x-filament::card>
 
         @empty
             <p>No hay devoluciones pendientes</p>

@@ -56,19 +56,24 @@ class AssignmentsRelationManager extends RelationManager
     }
 
     public function table(Table $table): Table
-    {
-        return $table
-            ->columns([
-                TextColumn::make('asset.device')->label('Dispositivo'),
-                TextColumn::make('asset.brand')->label('Marca'),
-                TextColumn::make('asset.model')->label('Modelo'),
+{
+    return $table
+        ->modifyQueryUsing(fn ($query) => 
+            in_array($this->getOwnerRecord()->status, ['offboarding', 'inactive'])
+                ? $query->withTrashed()
+                : $query
+        )
+        ->columns([
+            TextColumn::make('asset.device')->label('Dispositivo'),
+            TextColumn::make('asset.brand')->label('Marca'),
+            TextColumn::make('asset.model')->label('Modelo'),
 
-                TextColumn::make('asset.processor')->label('CPU')->toggleable(),
-                TextColumn::make('asset.ram')->label('RAM')->toggleable(),
-                TextColumn::make('asset.disk')->label('Disco')->toggleable(),
+            TextColumn::make('asset.processor')->label('CPU')->toggleable(),
+            TextColumn::make('asset.ram')->label('RAM')->toggleable(),
+            TextColumn::make('asset.disk')->label('Disco')->toggleable(),
 
-                TextColumn::make('asset.serial')->label('Nº Serie'),
-            ])
+            TextColumn::make('asset.serial')->label('Nº Serie'),
+        ])
 
             ->headerActions([
     CreateAction::make()

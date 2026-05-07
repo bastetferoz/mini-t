@@ -6,23 +6,22 @@
 
     <div class="space-y-3">
 
-        @foreach ($record->assignments as $assignment)
-            @php 
-                $asset = $assignment->asset;
-                $history = $asset->histories->last();
-                $notes = $history?->notes ?? '';
-            @endphp
+        @forelse (
+            \App\Models\AssetHistory::where('person_id', $record->id)
+                ->with('asset')
+                ->latest()
+                ->get() as $history
+        )
+            @php $asset = $history->asset; @endphp
 
             <div class="p-3 border-b border-gray-700">
 
-                {{-- 🔹 INFO COMPLETA DEL EQUIPO --}}
                 <div class="font-semibold">
                     {{ $asset->device }}
-
                     @if($asset->brand) - {{ $asset->brand }} @endif
                     @if($asset->model) - {{ $asset->model }} @endif
-                    @if($asset->processor) - {{ $asset->processor }} @endif
-                    @if($asset->ram) - {{ $asset->ram }}GB @endif
+                    @if($asset->cpu) - {{ $asset->cpu }} @endif
+                    @if($asset->ram) - {{ $asset->ram }} @endif
                     @if($asset->disk) - {{ $asset->disk }} @endif
                 </div>
 
@@ -30,28 +29,24 @@
                     SN: {{ $asset->serial ?? '-' }}
                 </div>
 
-                {{-- 🔹 ESTADO --}}
                 <div class="text-sm font-semibold mt-1">
-
-                    @if ($asset->status === 'available')
+                    @if ($history->action === 'Devuelto')
                         <span class="text-green-400">✔ Devuelto</span>
-
-                    @elseif ($asset->status === 'retired')
+                    @elseif ($history->action === 'No devuelto')
                         <span class="text-red-400">
                             ❌ No devuelto
-                            @if($notes)
-                                - {{ $notes }}
-                            @endif
+                            @if($history->notes) - {{ $history->notes }} @endif
                         </span>
-
-                    @elseif ($asset->status === 'in_transit')
-                        <span class="text-yellow-400">🟡 En tránsito</span>
+                    @else
+                        <span class="text-gray-400">{{ $history->action }}</span>
                     @endif
-
                 </div>
 
             </div>
-        @endforeach
+
+        @empty
+            <p class="text-gray-400">Sin historial de activos.</p>
+        @endforelse
 
     </div>
 
