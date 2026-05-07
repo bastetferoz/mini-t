@@ -119,7 +119,7 @@ class ViewPerson extends ViewRecord
                             Textarea::make('comentario')
                                 ->label('Comentario')
                                 ->rows(2)
-                                ->visible(fn ($get) => !$get('devuelto'))
+                                
                                 ->nullable(),
 
                         ])
@@ -158,7 +158,11 @@ class ViewPerson extends ViewRecord
     'asset_id'  => $asset->id,
     'person_id' => $record->id,
     'action'    => 'Devuelto',
-    'notes'     => 'Ex ' . $record->name,
+    'notes' => trim(
+    !empty($item['comentario'])
+        ? $item['comentario']
+        : ''
+),
 ]);
 
                         } else {
