@@ -17,6 +17,7 @@ class PeopleTable
 
                 TextColumn::make('email')
                     ->label('Email'),
+                    
 
                 TextColumn::make('area')
                     ->label('Área'),

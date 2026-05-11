@@ -18,8 +18,9 @@ class UserResource extends Resource
 
     // 🔥 NAVEGACIÓN (IMPORTANTE)
     protected static string | \UnitEnum | null $navigationGroup = 'Administración';
-protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-users';
-protected static ?string $navigationLabel = 'Usuarios';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-users';
+    protected static ?string $navigationLabel = 'Usuarios';
+    
 
     public static function form(Schema $schema): Schema
     {
@@ -31,6 +32,8 @@ protected static ?string $navigationLabel = 'Usuarios';
 
             TextInput::make('email')
                 ->email()
+                ->required()
+                ->unique(ignoreRecord: true)
                 ->required(),
 
             TextInput::make('password')

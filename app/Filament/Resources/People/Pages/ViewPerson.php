@@ -106,6 +106,8 @@ class ViewPerson extends ViewRecord
                                 ->label('¿Devuelto?')
                                 ->reactive(),
 
+                                
+
                             Select::make('motivo')
                                 ->label('Motivo')
                                 ->options([

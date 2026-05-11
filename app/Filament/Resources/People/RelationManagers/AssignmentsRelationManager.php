@@ -12,6 +12,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Toggle;
 
 class AssignmentsRelationManager extends RelationManager
 {
@@ -112,46 +113,61 @@ class AssignmentsRelationManager extends RelationManager
 
                 // 🔴 DESASIGNAR
                 Action::make('desasignar')
-                
-                    ->label('Desasignar')
-                    ->visible(fn () =>
-                 auth()->user()->hasRole('admin') ||
-                 auth()->user()->hasRole('it')
+    ->label('Desasignar')
+    ->visible(fn () =>
+        auth()->user()->hasRole('admin') ||
+        auth()->user()->hasRole('it')
     )
-                    ->color('warning')
-                    ->form([
-                        Select::make('reason')
-                            ->label('Motivo')
-                            ->options([
-                                'upgrade' => 'Upgrade',
-                                'fault' => 'Avería',
-                                'return' => 'Devolución',
-                            ])
-                            ->required(),
+    ->color('warning')
+    ->form([
+        Select::make('reason')
+            ->label('Motivo')
+            ->options([
+                'upgrade' => 'Upgrade',
+                'fault' => 'Avería',
+                'return' => 'Devolución',
+            ])
+            ->required(),
 
-                        Textarea::make('notes')
-                            ->label('Observación'),
-                    ])
-                    ->action(function ($record, $data) {
+        Textarea::make('notes')
+            ->label('Observación'),
 
-                        AssetHistory::create([
-                            'asset_id' => $record->asset_id,
-                            'person_id' => $record->person_id,
-                            'action' => $data['reason'],
-                            'notes' => $data['notes'] ?? null,
-                        ]);
+        Toggle::make('send_email')
+            ->label('Enviar notificación por correo')
+            ->default(true),
+    ])
+    ->action(function ($record, $data) {
 
-                        if ($data['reason'] === 'fault') {
-                            Asset::where('id', $record->asset_id)
-                                ->update(['status' => 'retired']);
-                        } else {
-                            Asset::where('id', $record->asset_id)
-                                ->update(['status' => 'available']);
-                        }
+        // Guardar referencias antes de borrar el assignment
+        $asset = $record->asset;
+        $person = $record->person;
 
-                        $record->delete();
-                    }),
+        AssetHistory::create([
+            'asset_id'  => $record->asset_id,
+            'person_id' => $record->person_id,
+            'action'    => $data['reason'],
+            'notes'     => $data['notes'] ?? null,
+        ]);
 
+        if ($data['reason'] === 'fault') {
+            Asset::where('id', $record->asset_id)
+                ->update(['status' => 'retired']);
+        } else {
+            Asset::where('id', $record->asset_id)
+                ->update(['status' => 'available']);
+        }
+
+        $record->delete();
+
+        // 📧 Enviar correo usando la plantilla asset_return
+        if (!empty($data['send_email'])) {
+            \App\Services\MailTemplateService::send('asset_return', [
+                'person_name' => $person->name,
+                'asset'       => "{$asset->device} - {$asset->brand} - {$asset->model}",
+                'date'        => now()->format('d/m/Y'),
+            ]);
+        }
+    }),
                 // 🔵 REEMPLAZAR
                 Action::make('reemplazar')
                     ->label('Reemplazar')
@@ -205,31 +221,50 @@ class AssignmentsRelationManager extends RelationManager
 
                         Textarea::make('notes')
                             ->label('Motivo / Observación'),
+                            
+                            Toggle::make('send_email')
+    ->label('Enviar notificación por correo')
+    ->default(true),
                     ])
 
                     ->action(function ($record, $data) {
 
-                        // historial del viejo
-                        AssetHistory::create([
-                            'asset_id' => $record->asset_id,
-                            'person_id' => $record->person_id,
-                            'action' => 'upgrade',
-                            'notes' => $data['notes'] ?? 'Reemplazo de equipo',
-                        ]);
+    // ✅ AGREGAR ESTAS 3 LÍNEAS AL INICIO
+    $oldAsset = Asset::find($record->asset_id);
+    $newAsset = Asset::find($data['new_asset_id']);
+    $person   = $record->person;
 
-                        // liberar viejo
-                        Asset::where('id', $record->asset_id)
-                            ->update(['status' => 'available']);
+    // historial del viejo
+    AssetHistory::create([
+        'asset_id'  => $record->asset_id,
+        'person_id' => $record->person_id,
+        'action'    => 'upgrade',
+        'notes'     => $data['notes'] ?? 'Reemplazo de equipo',
+    ]);
 
-                        // asignar nuevo
-                        $record->update([
-                            'asset_id' => $data['new_asset_id'],
-                        ]);
+    // liberar viejo
+    Asset::where('id', $record->asset_id)
+        ->update(['status' => 'available']);
 
-                        // marcar nuevo como asignado
-                        Asset::where('id', $data['new_asset_id'])
-                            ->update(['status' => 'assigned']);
-                    }),
+    // asignar nuevo
+    $record->update(['asset_id' => $data['new_asset_id']]);
+
+    // marcar nuevo como asignado
+    Asset::where('id', $data['new_asset_id'])
+        ->update(['status' => 'assigned']);
+
+    // ✅ AGREGAR ESTO AL FINAL
+    if (!empty($data['send_email']))
+         {
+    \App\Services\MailTemplateService::send('asset_replacement', [
+        'person_name' => $person->name,
+        'old_asset'   => "{$oldAsset->device} - {$oldAsset->brand} - {$oldAsset->model}",
+        'new_asset'   => "{$newAsset->device} - {$newAsset->brand} - {$newAsset->model}",
+        'date'        => now()->format('d/m/Y'),
+    
+    ]);
+}
+}),
             ]);
     }
 }

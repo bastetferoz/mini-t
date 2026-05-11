@@ -30,14 +30,14 @@ class AssetsTable
     ->formatStateUsing(fn ($state) => match ($state) {
         'available' => 'Disponible',
         'assigned' => 'En uso',
-        'in_return' => 'En devolución',
+        'in_transit' => 'En devolución',
         'retired' => 'Dado de baja',
         default => $state,
     })
     ->colors([
         'success' => fn ($state) => $state === 'available',
         'info' => fn ($state) => $state === 'assigned',
-        'warning' => fn ($state) => $state === 'in_return',
+        'warning' => fn ($state) => $state === 'in_transit',
         'danger' => fn ($state) => $state === 'retired',
     ]),
     ]);

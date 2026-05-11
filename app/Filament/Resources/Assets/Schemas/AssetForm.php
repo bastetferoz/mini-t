@@ -29,6 +29,7 @@ class AssetForm
             'in_return' => 'En devolución',
             'retired' => 'Dado de baja',
         ])
+        
         ->default('available')
         ->required(),
 
