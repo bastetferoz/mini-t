@@ -32,45 +32,62 @@ class ViewPerson extends ViewRecord
 
             // 🔴 SOLICITAR BAJA
             Action::make('baja')
-                ->label('Solicitar baja')
-                ->color('danger')
-                ->modalSubmitActionLabel('Confirmar baja')
-                ->modalCancelActionLabel('Cancelar')
+    ->label('Solicitar baja')
+    ->color('danger')
+    ->modalSubmitActionLabel('Confirmar baja')
+    ->modalCancelActionLabel('Cancelar')
 
-                ->visible(fn ($record) =>
-                    ($record->status ?? 'active') === 'active' &&
-                    (
-                        auth()->user()->hasRole('admin') ||
-                        auth()->user()->hasRole('it')
-                    )
-                )
+    ->visible(fn ($record) =>
+        ($record->status ?? 'active') === 'active' &&
+        (
+            auth()->user()->hasRole('admin') ||
+            auth()->user()->hasRole('it')
+        )
+    )
 
-                ->modalHeading('Activos asignados')
-                ->modalDescription(fn ($record) =>
-                    new HtmlString(
-                        $record->assignments->map(fn ($a) =>
-                            "<div>• {$a->asset->device} - {$a->asset->brand} - {$a->asset->model} - {$a->asset->serial}</div>"
-                        )->implode('')
-                    )
-                )
+    ->form([
+    \Filament\Forms\Components\Toggle::make('send_email')
+        ->label('Enviar notificación por correo')
+        ->default(true)
+        ->live()
+        ->helperText('Si está activado, al confirmar se enviará un correo con los equipos asignados.'),
+])
 
-                ->action(function ($record) {
+    ->modalHeading('Activos asignados')
+    ->modalDescription(fn ($record) =>
+        new HtmlString(
+            $record->assignments->map(fn ($a) =>
+                "<div>• {$a->asset->device} - {$a->asset->brand} - {$a->asset->model} - {$a->asset->serial}</div>"
+            )->implode('')
+        )
+    )
 
-                    $assignments = $record->assignments()->whereNull('deleted_at')->get();
+    ->action(function ($record, $data) {
 
-                    // 🔥 guardar asset_ids antes de borrar
-                    $assetIds = $assignments->pluck('asset_id');
+    $sendEmail = $data['send_email'] ?? true;
 
-                    foreach ($assetIds as $assetId) {
-                        \App\Models\Asset::where('id', $assetId)
-                            ->update(['status' => 'in_transit']);
-                    }
+    $assignments = $record->assignments()->whereNull('deleted_at')->get();
+    $assetIds = $assignments->pluck('asset_id');
 
-                    // 🔥 borrar assignments DESPUÉS de actualizar assets
-                    $record->assignments()->delete();
+    foreach ($assetIds as $assetId) {
+        \App\Models\Asset::where('id', $assetId)
+            ->update(['status' => 'in_transit']);
+    }
 
-                    $record->update(['status' => 'offboarding']);
-                }),
+    // Eliminar asignaciones activas.
+    $record->assignments()->delete();
+
+    // Cambiar estado de la persona.
+    $record->update([
+        'status' => 'offboarding',
+    ]);
+
+    // Enviar correo automáticamente si el toggle está activado.
+    if ($sendEmail) {
+        // Aquí va tu lógica de envío de correo.
+    }
+
+    }),
 
             // 🟢 REGISTRAR RECEPCIÓN
             Action::make('recibir')
@@ -185,6 +202,9 @@ class ViewPerson extends ViewRecord
                     }
 
                     $record->update(['status' => 'inactive']);
+                    return redirect()->to(
+    \App\Filament\Resources\People\PersonResource::getUrl('index')
+);
                 }),
         ];
     }

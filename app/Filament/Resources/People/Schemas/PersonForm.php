@@ -25,7 +25,11 @@ class PersonForm
                 TextInput::make('area')
                     ->label('Área'),
 
-                    
+               \Filament\Forms\Components\Toggle::make('send_email')
+    ->label('Enviar notificación por correo')
+    ->default(true)
+    ->helperText('Si está activado, al guardar se enviará la plantilla de alta.')
+       
 
                 
 
