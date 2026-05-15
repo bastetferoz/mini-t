@@ -46,21 +46,48 @@ class ViewPerson extends ViewRecord
     )
 
     ->form([
-    \Filament\Forms\Components\Toggle::make('send_email')
-        ->label('Enviar notificación por correo')
-        ->default(true)
-        ->live()
-        ->helperText('Si está activado, al confirmar se enviará un correo con los equipos asignados.'),
+    
+        
+        
 ])
 
     ->modalHeading('Activos asignados')
     ->modalDescription(fn ($record) =>
-        new HtmlString(
-            $record->assignments->map(fn ($a) =>
-                "<div>• {$a->asset->device} - {$a->asset->brand} - {$a->asset->model} - {$a->asset->serial}</div>"
-            )->implode('')
-        )
+    new HtmlString(
+        // Equipos asignados
+        $record->assignments->map(fn ($a) =>
+            "<div>• {$a->asset->device} - {$a->asset->brand} - {$a->asset->model} - {$a->asset->serial}</div>"
+        )->implode('')
+
+        // Servicios asignados
+        . (
+    ! empty($record->services)
+        ? '<div class="mt-6 pt-4 border-t border-gray-700">'
+            . '<br>'
+            . '<strong>Se dio de baja en:</strong><br>'
+            . collect($record->services)
+                ->map(function ($service) {
+                    return '• ' . match ($service) {
+                        'jira' => 'Jira',
+                        'bitbucket' => 'Bitbucket',
+                        'monday' => 'Monday',
+                        'microsoft_365' => 'Microsoft 365',
+                        'teams' => 'Teams',
+                        'groups' => 'Grupos',
+                        'slack' => 'Slack',
+                        'github' => 'GitHub',
+                        'google_workspace' => 'Google Workspace',
+                        'zoom' => 'Zoom',
+                        'trello' => 'Trello',
+                        default => ucfirst(str_replace('_', ' ', $service)),
+                    };
+                })
+                ->implode('<br>')
+            . '</div>'
+        : ''
+)
     )
+)
 
     ->action(function ($record, $data) {
 

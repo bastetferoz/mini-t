@@ -24,7 +24,7 @@ class SmtpProfile extends Model
     protected $casts = [
         'is_default' => 'boolean',
         'is_active' => 'boolean',
-        // Opcional: guarda la contraseña cifrada en la base de datos
+        // Opcional: guardar la contraseña cifrada en la base de datos
         // 'password' => 'encrypted',
     ];
 }

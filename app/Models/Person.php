@@ -9,14 +9,21 @@ use App\Models\Assignment;
 class Person extends Model
 {
     use SoftDeletes;
-    public function assignments()
-    {
-        return $this->hasMany(Assignment::class);
-    }
+
     protected $fillable = [
         'name',
         'email',
         'area',
         'status',
+        'services',
     ];
+
+    protected $casts = [
+        'services' => 'array',
+    ];
+
+    public function assignments()
+    {
+        return $this->hasMany(Assignment::class);
+    }
 }

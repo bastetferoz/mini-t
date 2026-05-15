@@ -15,7 +15,7 @@ class MailTemplateService
                 ->where('is_active', true)
                 ->first();
 
-            if (!$template) {
+            if (! $template) {
                 return false;
             }
 
@@ -26,13 +26,13 @@ class MailTemplateService
                 $smtp = SmtpProfile::find($template->smtp_profile_id);
             }
 
-            if (!$smtp) {
+            if (! $smtp) {
                 $smtp = SmtpProfile::where('is_default', true)
                     ->where('is_active', true)
                     ->first();
             }
 
-            if (!$smtp) {
+            if (! $smtp) {
                 return false;
             }
 
@@ -41,7 +41,7 @@ class MailTemplateService
                 ?? ($variables['email'] ?? null)
                 ?? $smtp->default_to;
 
-            if (!$email) {
+            if (! $email) {
                 return false;
             }
 
@@ -73,12 +73,12 @@ class MailTemplateService
                     ->subject($subject);
 
                 // CC separados por ;
-                if (!empty($smtp->default_cc)) {
+                if (! empty($smtp->cc_addresses)) {
                     $ccList = array_filter(
-                        array_map('trim', explode(';', $smtp->default_cc))
+                        array_map('trim', explode(';', $smtp->cc_addresses))
                     );
 
-                    if (!empty($ccList)) {
+                    if (! empty($ccList)) {
                         $message->cc($ccList);
                     }
                 }
