@@ -29,10 +29,10 @@ class PersonForm
                     ->multiple()
                     ->searchable()
                     ->preload()
-                     ->default([
-        'teams',
-        'groups',
-    ])
+                    ->default([
+                        'teams',
+                        'groups',
+                    ])
                     ->options([
                         'jira' => 'Jira',
                         'bitbucket' => 'Bitbucket',
@@ -46,11 +46,32 @@ class PersonForm
                         'adobe' => 'Adobe',
                     ])
                     ->helperText('Seleccioná las plataformas a las que debe tener acceso el usuario.'),
-                    
-                Toggle::make('send_email')
-                    ->label('Enviar notificación por correo')
-                    ->default(true)
-                    ->helperText('Si está activado, al guardar se enviará la plantilla de alta.'),
+
+            
+
+                // 🔹 Toggle: Nuevo ingreso
+                Toggle::make('onboarding_completed')
+                    ->label('Nuevo ingreso')
+                    ->default(false)
+                    ->hiddenOn('view')
+                    ->live()
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        if ($state) {
+                            $set('asset_assignment', false);
+                        }
+                    }),
+
+                // 🔹 Toggle: Asignación de equipo
+                Toggle::make('asset_assignment')
+                    ->label('Asignación de equipo')
+                    ->default(false)
+                    ->hiddenOn('view')
+                    ->live()
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        if ($state) {
+                            $set('onboarding_completed', false);
+                        }
+                    }),
 
             ]);
     }

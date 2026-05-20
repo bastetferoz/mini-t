@@ -68,7 +68,7 @@ class MailTemplateService
                 'mail.from.name'               => $smtp->from_name,
             ]);
 
-            Mail::raw($body, function ($message) use ($email, $subject, $smtp) {
+            Mail::html($body, function ($message) use ($email, $subject, $smtp) {
                 $message->to($email)
                     ->subject($subject);
 

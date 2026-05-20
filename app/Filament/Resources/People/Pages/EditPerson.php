@@ -27,37 +27,40 @@ class EditPerson extends EditRecord
      */
     protected function afterSave(): void
 {
-    $sendEmail = $this->form->getComponent('send_email')?->getState();
+    $data = $this->form->getState();
 
-    if (! $sendEmail) {
-        return;
+    // Variables para la plantilla
+    $variables = [
+        'person_name' => $this->record->name,
+        'email'       => $this->record->email,
+        'asset'       => $this->record->assignments
+            ->map(fn ($a) =>
+                $a->asset->device . ' - ' .
+                $a->asset->brand . ' - ' .
+                $a->asset->model
+            )
+            ->implode("\n"),
+        'date' => now()->format('d/m/Y'),
+    ];
+
+    // Nuevo ingreso
+    if ($data['onboarding_completed'] ?? false) {
+        \App\Services\MailTemplateService::send(
+            'onboarding_completed',
+            $variables
+            
+        );
     }
 
-    // Obtener todos los activos asignados a la persona
-    $assets = $this->record->assignments()
-        ->with('asset')
-        ->get()
-        ->map(function ($assignment) {
-            $asset = $assignment->asset;
-
-            if (! $asset) {
-                return null;
-            }
-
-            return '- ' . $asset->device .
-                   ' - ' . $asset->brand .
-                   ' - ' . $asset->model .
-                   (!empty($asset->serial) ? ' - ' . $asset->serial : '');
-        })
-        ->filter()
-        ->implode("\n");
-
-    // Enviar correo
-    \App\Services\MailTemplateService::send('onboarding_completed', [
-        'person_name' => $this->record->name,
-        'asset'       => $assets,
-        'date'        => now()->format('d/m/Y'),
-    ]);
+    // Asignación de equipo
+    if ($data['asset_assignment'] ?? false) {
+        \App\Services\MailTemplateService::send(
+            'asset_assignment',
+            $variables
+            
+            
+        );
+    }
 }
 
     /**
