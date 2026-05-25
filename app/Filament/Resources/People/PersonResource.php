@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use App\Filament\Resources\People\RelationManagers\AssignmentsRelationManager;
 use Filament\Forms\Components\CheckboxList;
+use App\Filament\Resources\People\RelationManagers\AssetHistoriesRelationManager;
 
 
 class PersonResource extends Resource
@@ -52,12 +53,16 @@ class PersonResource extends Resource
         return PeopleTable::configure($table);
     }
 
-    public static function getRelations(): array
-    {
-       return [
+   public static function getRelations(): array
+{
+    return [
+
         AssignmentsRelationManager::class,
+
+        AssetHistoriesRelationManager::class,
+
     ];
-    }
+}
 
     public static function getPages(): array
     {

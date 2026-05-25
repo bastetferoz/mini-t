@@ -26,4 +26,8 @@ class Person extends Model
     {
         return $this->hasMany(Assignment::class);
     }
+    public function assetHistories()
+{
+    return $this->hasMany(\App\Models\AssetHistory::class);
+}
 }

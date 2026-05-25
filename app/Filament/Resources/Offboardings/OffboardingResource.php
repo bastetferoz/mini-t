@@ -29,6 +29,7 @@ class OffboardingResource extends Resource
 
     public static function getPages(): array
 {
+    
     return [
         'index' => Pages\ListOffboardings::route('/'),
         'view' => Pages\ViewOffboarding::route('/{record}'), // 👈 CLAVE

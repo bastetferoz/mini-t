@@ -168,103 +168,135 @@ class AssignmentsRelationManager extends RelationManager
             ]);
         }
     }),
-                // 🔵 REEMPLAZAR
-                Action::make('reemplazar')
-                    ->label('Reemplazar')
-                    ->visible(fn () =>
-                 auth()->user()->hasRole('admin') ||
-                 auth()->user()->hasRole('it')
+               // 🔵 REEMPLAZAR
+Action::make('reemplazar')
+    ->label('Reemplazar')
+    ->visible(fn () =>
+        auth()->user()->hasRole('admin') ||
+        auth()->user()->hasRole('it')
     )
-                    ->color('primary')
-                    ->form([
+    ->color('primary')
 
-                       Select::make('new_asset_id')
-    ->label('Nuevo equipo')
-    ->searchable()
-    ->preload()
-    ->getSearchResultsUsing(function (string $search) {
-        return Asset::query()
-            ->where('status', 'available')
-            ->when($search, function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('device', 'like', "%{$search}%")
-                      ->orWhere('model', 'like', "%{$search}%")
-                      ->orWhere('serial', 'like', "%{$search}%");
-                });
+    ->form([
+
+        Select::make('new_asset_id')
+            ->label('Nuevo equipo')
+            ->searchable()
+            ->preload()
+
+            ->getSearchResultsUsing(function (string $search) {
+
+                return Asset::query()
+
+                     ->where('status', 'available')
+                        ->when($search, function ($query) use ($search) {
+                            $query->where(function ($q) use ($search) {
+                                $q->where('device', 'like', "%{$search}%")
+                                  ->orWhere('model', 'like', "%{$search}%")
+                                  ->orWhere('serial', 'like', "%{$search}%");
+                            });
+
+                    })
+
+                    ->limit(50)
+
+                    ->get()
+
+                    ->mapWithKeys(fn ($asset) => [
+                        $asset->id =>
+                            "{$asset->device} - {$asset->brand} - {$asset->model} - {$asset->serial}"
+                    ]);
             })
-            ->limit(50)
-            ->get()
-            ->mapWithKeys(fn ($asset) => [
-                $asset->id => "{$asset->device} - {$asset->brand} - {$asset->model} - {$asset->serial}"
-            ]);
-    })
-    ->getOptionLabelUsing(function ($value): ?string {
-        $asset = Asset::find($value);
 
-        if (!$asset) {
-            return null;
+            ->getOptionLabelUsing(function ($value): ?string {
+
+                $asset = Asset::find($value);
+
+                if (! $asset) {
+                    return null;
+                }
+
+                return "{$asset->device} - {$asset->brand} - {$asset->model} - {$asset->serial}";
+            })
+
+            ->required(),
+
+        // 🔥 MOTIVO
+        Select::make('reason')
+            ->label('Motivo')
+            ->required()
+            ->options([
+                'upgrade'     => 'Upgrade',
+                'failure'     => 'Avería',
+                'replacement' => 'Reemplazo preventivo',
+                'loan'        => 'Préstamo',
+            ]),
+
+        // 🔥 OBSERVACIÓN
+        Textarea::make('notes')
+            ->label('Motivo / Observación')
+            ->rows(3),
+
+        // 🔥 EMAIL
+        Toggle::make('send_email')
+            ->label('Enviar notificación por correo')
+            ->default(true),
+
+    ])
+
+    ->action(function ($record, $data) {
+
+        // 🚫 evitar mismo equipo
+        if ($record->asset_id == $data['new_asset_id']) {
+            return;
         }
 
-        return "{$asset->device} - {$asset->brand} - {$asset->model} - {$asset->serial}";
-    })
+        $oldAsset = Asset::find($record->asset_id);
+        $newAsset = Asset::find($data['new_asset_id']);
+        $person   = $record->person;
 
-    // 🔥 VALIDACIÓN (ACÁ VA)
-    ->rule(function ($get, $record) {
-        return function ($attribute, $value, $fail) use ($record) {
-            if ($value == $record->asset_id) {
-                $fail('No podés seleccionar el mismo equipo.');
-            }
-        };
-    })
+        // 📝 Historial
+        AssetHistory::create([
+            'asset_id'  => $record->asset_id,
+            'person_id' => $record->person_id,
+            'action'    => $data['reason'],
+            'notes'     => $data['notes'] ?? 'Reemplazo de equipo',
+        ]);
 
-    ->required(),
+        // 🔓 Liberar viejo
+        Asset::where('id', $record->asset_id)
+            ->update(['status' => 'available']);
 
-                        Textarea::make('notes')
-                            ->label('Motivo / Observación'),
-                            
-                            Toggle::make('send_email')
-    ->label('Enviar notificación por correo')
-    ->default(true),
-                    ])
+        // 🔁 Asignar nuevo
+        $record->update([
+            'asset_id' => $data['new_asset_id'],
+        ]);
 
-                    ->action(function ($record, $data) {
+        // 🔒 Nuevo en uso
+        Asset::where('id', $data['new_asset_id'])
+            ->update(['status' => 'assigned']);
 
-    // ✅ AGREGAR ESTAS 3 LÍNEAS AL INICIO
-    $oldAsset = Asset::find($record->asset_id);
-    $newAsset = Asset::find($data['new_asset_id']);
-    $person   = $record->person;
+        // 📧 Correo
+        if (! empty($data['send_email'])) {
 
-    // historial del viejo
-    AssetHistory::create([
-        'asset_id'  => $record->asset_id,
-        'person_id' => $record->person_id,
-        'action'    => 'upgrade',
-        'notes'     => $data['notes'] ?? 'Reemplazo de equipo',
-    ]);
+            \App\Services\MailTemplateService::send(
+                'asset_replacement',
+                [
+                    'person_name' => $person->name,
 
-    // liberar viejo
-    Asset::where('id', $record->asset_id)
-        ->update(['status' => 'available']);
+                    'old_asset' =>
+                        "{$oldAsset->device} - {$oldAsset->brand} - {$oldAsset->model}",
 
-    // asignar nuevo
-    $record->update(['asset_id' => $data['new_asset_id']]);
+                    'new_asset' =>
+                        "{$newAsset->device} - {$newAsset->brand} - {$newAsset->model}",
 
-    // marcar nuevo como asignado
-    Asset::where('id', $data['new_asset_id'])
-        ->update(['status' => 'assigned']);
+                    'reason' => $data['reason'],
 
-    // ✅ AGREGAR ESTO AL FINAL
-    if (!empty($data['send_email']))
-         {
-    \App\Services\MailTemplateService::send('asset_replacement', [
-        'person_name' => $person->name,
-        'old_asset'   => "{$oldAsset->device} - {$oldAsset->brand} - {$oldAsset->model}",
-        'new_asset'   => "{$newAsset->device} - {$newAsset->brand} - {$newAsset->model}",
-        'date'        => now()->format('d/m/Y'),
-    
-    ]);
-}
-}),
+                    'date' => now()->format('d/m/Y'),
+                ]
+            );
+        }
+    }),
             ]);
     }
 }
