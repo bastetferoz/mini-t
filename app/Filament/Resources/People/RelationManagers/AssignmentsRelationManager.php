@@ -297,6 +297,10 @@ Action::make('reemplazar')
             );
         }
     }),
+    
             ]);
+            activity()
+    ->causedBy(auth()->user())
+    ->log("Reemplazo de equipo para {$person->name}: {$oldLabel} → {$newLabel}");
     }
 }

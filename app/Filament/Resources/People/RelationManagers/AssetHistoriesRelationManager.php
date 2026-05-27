@@ -14,47 +14,39 @@ class AssetHistoriesRelationManager extends RelationManager
     protected static ?string $title = 'Historial de activos';
 
     public function table(Table $table): Table
-    {
-        return $table
-            ->columns([
-
-                TextColumn::make('created_at')
-                    ->label('Fecha')
-                    ->dateTime('d/m/Y H:i')
-                    ->sortable(),
-
-                TextColumn::make('action')
-                    ->label('Acción')
-                    ->badge()
-                    ->color(fn ($state) => match ($state) {
-                        'assignment'  => 'success',
-                        'replacement' => 'warning',
-                        'return'      => 'gray',
-                        'retired'     => 'danger',
-                        default       => 'primary',
-                    }),
-
-                TextColumn::make('asset.device')
-                    ->label('Dispositivo'),
-
-                TextColumn::make('asset.brand')
-                    ->label('Marca'),
-
-                TextColumn::make('asset.model')
-                    ->label('Modelo'),
-
-                    TextColumn::make('asset.serial')
-    ->label('Nº Serie')
-    ->searchable()
-    ->copyable(),
-    
-                TextColumn::make('notes')
-                    ->label('Observación')
-                    ->limit(40),
-
-                    
-
-            ])
-            ->defaultSort('created_at', 'desc');
-    }
+{
+    return $table
+        ->modifyQueryUsing(fn ($query) => $query->where('action', '!=', 'assignment'))
+        ->columns([
+            TextColumn::make('created_at')
+                ->label('Fecha')
+                ->dateTime('d/m/Y H:i')
+                ->sortable(),
+            TextColumn::make('action')
+                ->label('Acción')
+                ->badge()
+                ->color(fn ($state) => match ($state) {
+                    'upgrade'     => 'warning',
+                    'fault'       => 'danger',
+                    'return'      => 'gray',
+                    'Devuelto'    => 'success',
+                    'No devuelto' => 'danger',
+                    default       => 'primary',
+                }),
+            TextColumn::make('asset.device')
+                ->label('Dispositivo'),
+            TextColumn::make('asset.brand')
+                ->label('Marca'),
+            TextColumn::make('asset.model')
+                ->label('Modelo'),
+            TextColumn::make('asset.serial')
+                ->label('Nº Serie')
+                ->searchable()
+                ->copyable(),
+            TextColumn::make('notes')
+                ->label('Observación')
+                ->limit(40),
+        ])
+        ->defaultSort('created_at', 'desc');
+}
 }
