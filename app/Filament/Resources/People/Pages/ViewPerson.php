@@ -93,12 +93,7 @@ class ViewPerson extends ViewRecord
                     $record->update([
     'status' => 'offboarding',
     'offboarding_started_at' => now(),
-    
 ]);
-activity()
-    ->causedBy(auth()->user())
-    ->performedOn($record)
-    ->log("Solicitud de baja iniciada para {$record->name}");
                 }),
 
             // 🟢 REGISTRAR RECEPCIÓN
@@ -191,10 +186,7 @@ activity()
     'status' => 'inactive',
     'offboarding_completed_at' => now(),
 ]);
-activity()
-    ->causedBy(auth()->user())
-    ->performedOn($record)
-    ->log("Recepción de equipos registrada para {$record->name}");
+
                     // 📧 ENVIAR CORREO CON RESUMEN
                     $resumen = collect($assets)->map(function ($item) {
                         $asset = \App\Models\Asset::find($item['asset_id']);

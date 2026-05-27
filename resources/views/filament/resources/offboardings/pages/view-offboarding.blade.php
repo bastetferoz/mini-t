@@ -79,7 +79,7 @@
         </div>
     </x-filament::card>
 
-   {{-- Fechas --}}
+ {{-- Fechas --}}
 <x-filament::card>
     <div class="grid grid-cols-2 gap-6">
         <div>
@@ -92,7 +92,7 @@
             <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Cierre de baja</p>
             <p class="text-sm text-gray-300">
                 @if($record->offboarding_completed_at)
-                    {{ \Carbon\Carbon::parse($record->offboarding_completed_at)->format('d/m/Y H:i') }}
+                    {{ $record->offboarding_completed_at->format('d/m/Y H:i') }}
                 @else
                     <x-filament::badge color="warning">Pendiente</x-filament::badge>
                 @endif

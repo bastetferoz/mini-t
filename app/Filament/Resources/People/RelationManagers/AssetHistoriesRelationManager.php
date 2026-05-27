@@ -13,7 +13,7 @@ class AssetHistoriesRelationManager extends RelationManager
 
     protected static ?string $title = 'Historial de activos';
 
-    public function table(Table $table): Table
+public function table(Table $table): Table
 {
     return $table
         ->modifyQueryUsing(fn ($query) => $query->where('action', '!=', 'assignment'))
