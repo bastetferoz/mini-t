@@ -33,13 +33,10 @@ class EditPerson extends EditRecord
     $variables = [
         'person_name' => $this->record->name,
         'email'       => $this->record->email,
-        'asset'       => $this->record->assignments
-            ->map(fn ($a) =>
-                $a->asset->device . ' - ' .
-                $a->asset->brand . ' - ' .
-                $a->asset->model
-            )
-            ->implode("\n"),
+       'asset' => $this->record->assignments
+    ->map(fn ($a) => $a->asset->full_description)
+    ->implode('<br>'),
+
         'date' => now()->format('d/m/Y'),
     ];
 

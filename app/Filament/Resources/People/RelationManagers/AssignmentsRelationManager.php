@@ -163,7 +163,7 @@ class AssignmentsRelationManager extends RelationManager
         if (!empty($data['send_email'])) {
             \App\Services\MailTemplateService::send('asset_return', [
                 'person_name' => $person->name,
-                'asset'       => "{$asset->device} - {$asset->brand} - {$asset->model}",
+                  'asset' => $asset->full_description,
                 'date'        => now()->format('d/m/Y'),
             ]);
         }
@@ -263,9 +263,18 @@ Action::make('reemplazar')
             'notes'     => $data['notes'] ?? 'Reemplazo de equipo',
         ]);
 
-        // 🔓 Liberar viejo
-        Asset::where('id', $record->asset_id)
-            ->update(['status' => 'available']);
+        // 🔓 Liberar o retirar viejo según motivo
+if ($data['reason'] === 'failure') {
+
+    Asset::where('id', $record->asset_id)
+        ->update(['status' => 'retired']);
+
+} else {
+
+    Asset::where('id', $record->asset_id)
+        ->update(['status' => 'available']);
+
+}
 
         // 🔁 Asignar nuevo
         $record->update([
@@ -284,11 +293,9 @@ Action::make('reemplazar')
                 [
                     'person_name' => $person->name,
 
-                    'old_asset' =>
-                        "{$oldAsset->device} - {$oldAsset->brand} - {$oldAsset->model}",
+                    'old_asset' => $oldAsset->full_description,
 
-                    'new_asset' =>
-                        "{$newAsset->device} - {$newAsset->brand} - {$newAsset->model}",
+    'new_asset' => $newAsset->full_description,
 
                     'reason' => $data['reason'],
 

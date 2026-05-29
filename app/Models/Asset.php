@@ -30,4 +30,34 @@ class Asset extends Model
     {
         return $this->hasMany(\App\Models\AssetHistory::class)->latest();
     }
+
+    public function getFullDescriptionAttribute(): string
+{
+    $parts = [
+        $this->device,
+        $this->brand,
+        $this->model,
+    ];
+
+    if ($this->cpu) {
+        $parts[] = $this->cpu;
+    }
+
+    if ($this->ram) {
+        $parts[] = $this->ram;
+    }
+
+    if ($this->disk) {
+        $parts[] = $this->disk;
+    }
+
+    $text = implode(' - ', array_filter($parts));
+
+    if ($this->serial) {
+        $text .= ' - SN: ' . $this->serial;
+    }
+
+    return $text;
+}
+
 }

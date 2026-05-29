@@ -46,11 +46,24 @@ class AssetInfolist
             ->label('Historial')
             ->schema([
                 TextEntry::make('person.name')
-                    ->label('Usuario')
-                    ->formatStateUsing(fn ($state) => $state ? "Ex {$state}" : '-'),
+    ->label('Usuario')
+    ->formatStateUsing(fn ($state) => $state ? "Ex {$state}" : 'IT'),
 
                 TextEntry::make('action')
-                    ->label('Acción'),
+    ->label('Acción')
+    ->badge()
+    ->formatStateUsing(fn ($state) => match ($state) {
+
+        'assignment'   => 'Asignación',
+        'upgrade'      => 'Upgrade',
+        'failure'      => 'Avería',
+        'replacement'  => 'Reemplazo preventivo',
+        'loan'         => 'Préstamo',
+        'return'       => 'Devuelto',
+        'reactivated'  => 'Reactivado',
+
+        default => $state,
+    }),
 
                 TextEntry::make('notes')
                     ->label('Detalle'),

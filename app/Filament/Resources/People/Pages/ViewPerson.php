@@ -189,26 +189,26 @@ class ViewPerson extends ViewRecord
 
                     // 📧 ENVIAR CORREO CON RESUMEN
                     $resumen = collect($assets)->map(function ($item) {
-                        $asset = \App\Models\Asset::find($item['asset_id']);
-                        if (!$asset) return null;
+    $asset = \App\Models\Asset::find($item['asset_id']);
+    if (!$asset) return null;
 
-                        $linea = "• {$asset->device} - {$asset->brand} - {$asset->model}";
+    $linea = "• {$asset->full_description}";
 
-                        if ($item['devuelto']) {
-                            $linea .= " → Devuelto";
-                            if (!empty($item['comentario'])) {
-                                $linea .= " ({$item['comentario']})";
-                            }
-                        } else {
-                            $motivo = $item['motivo'] ?? 'sin especificar';
-                            $linea .= " → No devuelto ({$motivo})";
-                            if (!empty($item['comentario'])) {
-                                $linea .= " - {$item['comentario']}";
-                            }
-                        }
+    if ($item['devuelto']) {
+        $linea .= " → Devuelto";
+        if (!empty($item['comentario'])) {
+            $linea .= " ({$item['comentario']})";
+        }
+    } else {
+        $motivo = $item['motivo'] ?? 'sin especificar';
+        $linea .= " → No devuelto ({$motivo})";
+        if (!empty($item['comentario'])) {
+            $linea .= " - {$item['comentario']}";
+        }
+    }
 
-                        return $linea;
-                    })->filter()->implode("<br>");
+    return $linea;
+})->filter()->implode("<br>");
 
                     \App\Services\MailTemplateService::send('offboarding_completed', [
                         'person_name' => $record->name,
