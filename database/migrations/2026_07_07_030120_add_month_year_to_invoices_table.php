@@ -9,11 +9,15 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-   public function up(): void
+    public function up(): void
 {
     Schema::table('invoices', function (Blueprint $table) {
-        $table->unsignedTinyInteger('month')->after('period');
-        $table->unsignedSmallInteger('year')->after('month');
+        if (!Schema::hasColumn('invoices', 'month')) {
+            $table->unsignedTinyInteger('month')->after('period');
+        }
+        if (!Schema::hasColumn('invoices', 'year')) {
+            $table->unsignedSmallInteger('year')->after('month');
+        }
     });
 }
 
