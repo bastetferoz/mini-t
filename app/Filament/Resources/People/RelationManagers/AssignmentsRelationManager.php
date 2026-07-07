@@ -295,7 +295,7 @@ if ($data['reason'] === 'failure') {
 
                     'old_asset' => $oldAsset->full_description,
 
-    'new_asset' => $newAsset->full_description,
+                    'new_asset' => $newAsset->full_description,
 
                     'reason' => $data['reason'],
 
@@ -304,10 +304,7 @@ if ($data['reason'] === 'failure') {
             );
         }
     }),
-    
+
             ]);
-            activity()
-    ->causedBy(auth()->user())
-    ->log("Reemplazo de equipo para {$person->name}: {$oldLabel} → {$newLabel}");
     }
 }

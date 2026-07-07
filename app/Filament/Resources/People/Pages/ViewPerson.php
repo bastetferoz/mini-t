@@ -96,6 +96,48 @@ class ViewPerson extends ViewRecord
 ]);
                 }),
 
+            // ⏪ REVERTIR BAJA (solo admin)
+            Action::make('revertir_baja')
+                ->label('Revertir baja')
+                ->color('gray')
+                ->icon('heroicon-o-arrow-uturn-left')
+                ->requiresConfirmation()
+                ->modalHeading('¿Revertir esta baja?')
+                ->modalDescription('Se restaurarán las asignaciones y el agente volverá a estado activo.')
+                ->modalSubmitActionLabel('Sí, revertir')
+                ->modalCancelActionLabel('Cancelar')
+                ->visible(fn ($record) =>
+                    $record->status === 'offboarding' &&
+                    auth()->user()->hasRole('admin')
+                )
+                ->action(function ($record) {
+
+                    // Restaurar assignments soft-deleted de esta persona
+                    $trashedAssignments = \App\Models\Assignment::onlyTrashed()
+                        ->where('person_id', $record->id)
+                        ->get();
+
+                    foreach ($trashedAssignments as $assignment) {
+                        $assignment->restore();
+
+                        \App\Models\Asset::where('id', $assignment->asset_id)
+                            ->where('status', 'in_transit')
+                            ->update(['status' => 'assigned']);
+                    }
+
+                    // Restaurar persona a estado activo
+                    $record->update([
+                        'status' => 'active',
+                        'offboarding_started_at' => null,
+                    ]);
+
+                    \Filament\Notifications\Notification::make()
+                        ->title('Baja revertida')
+                        ->body("Se restauraron {$trashedAssignments->count()} asignaciones.")
+                        ->success()
+                        ->send();
+                }),
+
             // 🟢 REGISTRAR RECEPCIÓN
             Action::make('recibir')
                 ->label('Registrar recepción')
