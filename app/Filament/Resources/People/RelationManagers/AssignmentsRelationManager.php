@@ -230,6 +230,7 @@ Action::make('reemplazar')
                 'failure'     => 'Avería',
                 'replacement' => 'Reemplazo preventivo',
                 'loan'        => 'Préstamo',
+                'lost'        => 'Extravío',
             ]),
 
         // 🔥 OBSERVACIÓN
@@ -264,7 +265,7 @@ Action::make('reemplazar')
         ]);
 
         // 🔓 Liberar o retirar viejo según motivo
-if ($data['reason'] === 'failure') {
+if ($data['reason'] === 'failure' || $data['reason'] === 'lost') {
 
     Asset::where('id', $record->asset_id)
         ->update(['status' => 'retired']);

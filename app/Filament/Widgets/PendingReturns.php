@@ -106,6 +106,14 @@ foreach ($this->rrhhAssets as $assetId => $received) {
         ->update([
             'returned' => $received ? 1 : 0,
         ]);
+
+    // Registrar en historial lo que RRHH acusa
+    \App\Models\AssetHistory::create([
+        'asset_id'  => $assetId,
+        'person_id' => $this->rrhhPersonId,
+        'action'    => $received ? 'RRHH: Devuelto' : 'RRHH: No devuelto',
+        'notes'     => 'Confirmado por RRHH (' . auth()->user()->name . ')',
+    ]);
 }
 
         // Registrar confirmación de RRHH
