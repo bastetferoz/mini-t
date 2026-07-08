@@ -181,19 +181,37 @@ class InvoiceBrowser extends Page
                 $period = $parsed['period'] ?? now()->format('Y-m');
                 $parts = explode('-', $period);
 
-                Invoice::create([
-                    'provider' => $provider,
-                    'service' => $parsed['service'] ?? null,
-                    'amount' => $parsed['amount'] ?? 0,
-                    'currency' => $parsed['currency'] ?? 'ARS',
-                    'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
-                    'period' => $period,
-                    'month' => (int) ($parts[1] ?? now()->month),
-                    'year' => (int) ($parts[0] ?? now()->year),
-                    'invoice_number' => $parsed['invoice_number'] ?? null,
-                    'file_path' => $finalPath,
-                    'notes' => 'Cargada automáticamente con IA',
-                ]);
+                $invoice = Invoice::create([
+    'provider' => $provider,
+    'service' => $parsed['service'] ?? null,
+    'amount' => $parsed['amount'] ?? 0,
+    'currency' => $parsed['currency'] ?? 'ARS',
+    'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
+    'period' => $period,
+    'month' => (int) ($parts[1] ?? now()->month),
+    'year' => (int) ($parts[0] ?? now()->year),
+    'invoice_number' => $parsed['invoice_number'] ?? null,
+    'file_path' => $finalPath,
+    'notes' => 'Cargada automáticamente con IA',
+]);
+
+// ✅ Tipo de cambio
+if ($invoice->currency === 'ARS') {
+    $rate = \App\Services\ExchangeRateService::getBnaRate(
+        $invoice->invoice_date->format('Y-m-d')
+    );
+    if ($rate) {
+        $invoice->update([
+            'exchange_rate' => $rate,
+            'amount_usd'    => round($invoice->amount / $rate, 2),
+        ]);
+    }
+} elseif ($invoice->currency === 'USD') {
+    $invoice->update([
+        'exchange_rate' => 1,
+        'amount_usd'    => $invoice->amount,
+    ]);
+}
 
                 Notification::make()
                     ->title('Factura cargada')

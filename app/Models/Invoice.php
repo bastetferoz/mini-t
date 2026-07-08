@@ -21,7 +21,9 @@ class Invoice extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'invoice_date' => 'date',
-    ];
+    'amount'        => 'decimal:2',
+    'amount_usd'    => 'decimal:2',
+    'exchange_rate' => 'decimal:4',
+    'invoice_date'  => 'date',
+];
 }

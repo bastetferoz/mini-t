@@ -215,25 +215,43 @@ PROMPT;
     /**
      * Extrae JSON de una respuesta que puede tener markdown.
      */
-    private static function extractJson(?string $content): ?array
-    {
-        if (! $content) {
-            return null;
-        }
-
-        // Limpiar posible markdown ```json ... ```
-        $content = preg_replace('/^```json\s*/i', '', trim($content));
-        $content = preg_replace('/\s*```$/i', '', $content);
-
-        $data = json_decode($content, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            report(new \Exception('InvoiceParser: JSON inválido: ' . $content));
-            return null;
-        }
-
-        return $data;
+   private static function extractJson(?string $content): ?array
+{
+    if (blank($content)) {
+        \Log::error('InvoiceParser: respuesta vacía.');
+        return null;
     }
+
+    // Guardar la respuesta completa para depuración
+    \Log::info("=========== IA RAW ===========");
+    \Log::info($content);
+    \Log::info("==============================");
+
+    // Eliminar bloques Markdown
+    $content = preg_replace('/```json/i', '', $content);
+    $content = str_replace('```', '', $content);
+
+    // Buscar el primer objeto JSON
+    $start = strpos($content, '{');
+    $end = strrpos($content, '}');
+
+    if ($start !== false && $end !== false) {
+        $content = substr($content, $start, $end - $start + 1);
+    }
+
+    $data = json_decode($content, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+
+        \Log::error("InvoiceParser: JSON inválido");
+        \Log::error(json_last_error_msg());
+        \Log::error($content);
+
+        return null;
+    }
+
+    return $data;
+}
 
     /**
      * Mueve el archivo a la carpeta organizada: invoices/{provider}/{year}/{month}/
