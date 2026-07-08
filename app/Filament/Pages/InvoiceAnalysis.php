@@ -119,21 +119,9 @@ class InvoiceAnalysis extends Page
         return $years;
     }
 
-    public function getByService(): array
-    {
-        return Invoice::selectRaw('service, SUM(amount) as total')
-            ->whereYear('invoice_date', $this->selectedYear)
-            ->where('currency', $this->selectedCurrency)
-            ->groupBy('service')
-            ->orderByDesc('total')
-            ->pluck('total', 'service')
-            ->toArray();
-    }
-
     public static function canAccess(): bool
     {
         return auth()->user()->hasRole('admin') ||
                auth()->user()->hasRole('it');
     }
-    
 }

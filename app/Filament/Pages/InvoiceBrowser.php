@@ -101,6 +101,12 @@ class InvoiceBrowser extends Page
      */
     public function getProviderLabel(string $provider): string
     {
+        $invoiceProvider = \App\Models\InvoiceProvider::where('slug', $provider)->first();
+
+        if ($invoiceProvider) {
+            return $invoiceProvider->name;
+        }
+
         return match ($provider) {
             'telecom' => 'Telecom',
             'metrotel' => 'Metrotel',
@@ -170,8 +176,9 @@ class InvoiceBrowser extends Page
 
                     Notification::make()
                         ->title('Error al analizar')
-                        ->body('La IA no pudo extraer datos de la factura. Revisá los logs para más detalles.')
+                        ->body(InvoiceParserService::$lastError ?? 'Error desconocido.')
                         ->danger()
+                        ->persistent()
                         ->send();
                     return;
                 }

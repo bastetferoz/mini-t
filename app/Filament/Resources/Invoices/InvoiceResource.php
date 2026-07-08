@@ -38,17 +38,7 @@ class InvoiceResource extends Resource
                 ->label('Proveedor')
                 ->required()
                 ->searchable()
-                ->options([
-                    'telecom' => 'Telecom',
-                    'metrotel' => 'Metrotel',
-                    'amazon' => 'Amazon (AWS)',
-                    'microsoft' => 'Microsoft',
-                    'google' => 'Google',
-                    'movistar' => 'Movistar',
-                    'claro' => 'Claro',
-                    'iplan' => 'iPlan',
-                    'otro' => 'Otro',
-                ]),
+                ->options(fn () => \App\Models\InvoiceProvider::getOptions() + ['otro' => 'Otro']),
 
             TextInput::make('service')
                 ->label('Servicio')
