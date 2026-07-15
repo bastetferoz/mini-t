@@ -1,11 +1,16 @@
-@import 'tailwindcss';
+/* El theme de Filament debe ser la base; no el reset genérico de Laravel. */
+@import '../../vendor/filament/filament/resources/css/theme.css';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source '../**/*.blade.php';
-@source '../**/*.js';
+@source '../../app/Filament';
+@source '../views/filament';
 
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+@layer base {
+    .fi-body {
+        background: #090b10;
+    }
 }

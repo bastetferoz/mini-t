@@ -14,6 +14,7 @@ use Filament\Forms\Components\Hidden;
 use Illuminate\Support\HtmlString;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Toggle;
+use Illuminate\Support\Facades\DB;
 
 class ViewPerson extends ViewRecord
 {
@@ -78,22 +79,32 @@ class ViewPerson extends ViewRecord
                         )
                     )
                 )
-                ->action(function ($record, $data) {
+                ->action(function ($record) {
+                    DB::transaction(function () use ($record) {
+                        $assignments = $record->assignments()->whereNull('deleted_at')->get();
+                        $assetIds = $assignments->pluck('asset_id');
 
-                    $assignments = $record->assignments()->whereNull('deleted_at')->get();
-                    $assetIds = $assignments->pluck('asset_id');
+                        $process = \App\Models\ReturnProcess::firstOrCreate([
+                            'person_id' => $record->id,
+                        ]);
 
-                    foreach ($assetIds as $assetId) {
-                        \App\Models\Asset::where('id', $assetId)
-                            ->update(['status' => 'in_transit']);
-                    }
+                        $process->assets()->syncWithoutDetaching(
+                            $assetIds->mapWithKeys(fn ($assetId) => [$assetId => ['returned' => false]])->all()
+                        );
 
-                    $record->assignments()->delete();
+                        \App\Models\Asset::whereIn('id', $assetIds)->update(['status' => 'in_transit']);
+                        $record->assignments()->delete();
+                        $record->update([
+                            'status' => 'offboarding',
+                            'offboarding_started_at' => now(),
+                        ]);
+                    });
 
-                    $record->update([
-    'status' => 'offboarding',
-    'offboarding_started_at' => now(),
-]);
+                    \Filament\Notifications\Notification::make()
+                        ->title('Baja iniciada')
+                        ->body('Configurá la modalidad de recuperación desde el dashboard.')
+                        ->success()
+                        ->send();
                 }),
 
             // ⏪ REVERTIR BAJA (solo admin)

@@ -3,11 +3,14 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Asset;
+use App\Models\Assignment;
 use App\Models\Person;
 use App\Models\ReturnProcess;
+use App\Models\ReturnShipment;
 use Filament\Notifications\Notification;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 
 
@@ -26,6 +29,18 @@ class PendingReturns extends Widget
     // Propiedades para el modal de RRHH
     public $rrhhAssets = [];
     public $rrhhPersonId = null;
+    public ?int $selectedPersonId = null;
+    public string $search = '';
+    public string $logisticsMethod = 'enviopack';
+    public string $trackingNumber = '';
+    public string $pickupScheduledAt = '';
+    public string $pickupContact = '';
+    public string $logisticsNotes = '';
+
+    public function mount(): void
+    {
+        $this->selectedPersonId = $this->getGroups()->first()?->first()?->assignments->first()?->person_id;
+    }
 
     /**
      * Agrupa los activos en devolución por persona.
@@ -44,7 +59,118 @@ class PendingReturns extends Widget
                 return optional(
                     $asset->assignments->first()?->person
                 )->name ?? 'Sin usuario';
+            })
+            ->filter(function ($assets, $person) {
+                return blank($this->search)
+                    || str_contains(mb_strtolower($person), mb_strtolower($this->search));
             });
+    }
+
+    /** Selecciona una devolución para mostrar el detalle de su envío. */
+    public function selectPerson(?int $personId): void
+    {
+        $this->selectedPersonId = $personId;
+        $this->resetLogisticsForm();
+    }
+
+    public function resetLogisticsForm(): void
+    {
+        $this->logisticsMethod = 'enviopack';
+        $this->trackingNumber = '';
+        $this->pickupScheduledAt = '';
+        $this->pickupContact = '';
+        $this->logisticsNotes = '';
+        $this->resetErrorBag();
+    }
+
+    public function getSelectedPerson(): ?Person
+    {
+        return $this->selectedPersonId ? Person::find($this->selectedPersonId) : null;
+    }
+
+    public function getSelectedShipment(): ?ReturnShipment
+    {
+        if (! $this->selectedPersonId) {
+            return null;
+        }
+
+        return ReturnShipment::query()
+            ->whereHas('returnProcess', fn ($query) => $query->where('person_id', $this->selectedPersonId))
+            ->latest('last_update')
+            ->first();
+    }
+
+    /** Guarda la modalidad logística elegida desde el panel de seguimiento. */
+    public function saveLogistics(): void
+    {
+        if (! $this->selectedPersonId) {
+            return;
+        }
+
+        $data = [
+            'method' => $this->logisticsMethod,
+            'tracking_number' => $this->trackingNumber,
+            'pickup_scheduled_at' => $this->pickupScheduledAt,
+            'pickup_contact' => $this->pickupContact,
+            'notes' => $this->logisticsNotes,
+        ];
+
+        Validator::make($data, [
+            'method' => ['required', 'in:enviopack,moto'],
+            'tracking_number' => ['nullable', 'string', 'max:100', 'required_if:method,enviopack'],
+            'pickup_scheduled_at' => ['nullable', 'date', 'required_if:method,moto'],
+            'pickup_contact' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ])->validate();
+
+        $process = ReturnProcess::firstOrCreate(['person_id' => $this->selectedPersonId]);
+
+        ReturnShipment::updateOrCreate(
+            ['return_process_id' => $process->id],
+            [
+                'logistics_method' => $data['method'],
+                'carrier' => $data['method'] === 'enviopack' ? 'Envíopack' : 'Moto / mensajería',
+                'tracking_number' => $data['method'] === 'enviopack' ? $data['tracking_number'] : null,
+                'tracking_status' => $data['method'] === 'enviopack' ? 'pending_tracking' : 'pickup_scheduled',
+                'notes' => blank($data['notes']) ? null : $data['notes'],
+                'pickup_scheduled_at' => $data['method'] === 'moto' ? $data['pickup_scheduled_at'] : null,
+                'pickup_contact' => $data['method'] === 'moto' && filled($data['pickup_contact']) ? $data['pickup_contact'] : null,
+            ]
+        );
+
+        Notification::make()
+            ->title('Logística de devolución guardada')
+            ->success()
+            ->send();
+
+        $this->resetLogisticsForm();
+    }
+
+    public function getMetrics(): array
+    {
+        $shipments = ReturnShipment::query();
+
+        return [
+            'pending' => Assignment::withTrashed()
+                ->whereHas('asset', fn ($query) => $query->where('status', 'in_transit'))
+                ->whereNotNull('person_id')
+                ->distinct('person_id')
+                ->count('person_id'),
+            'in_transit' => (clone $shipments)->whereIn('tracking_status', ['in_transit', 'En tránsito'])->count(),
+            'delivered' => (clone $shipments)->whereIn('tracking_status', ['delivered', 'Entregado'])->count(),
+            'delayed' => Asset::where('status', 'in_transit')->get()->filter(fn ($asset) => $asset->updated_at?->diffInDays(now()) >= 7)->count(),
+        ];
+    }
+
+    public function getTimeline(?ReturnShipment $shipment): array
+    {
+        $events = $shipment?->tracking_payload['events'] ?? [];
+
+        return collect($events)->map(fn ($event) => [
+            'status' => $event['status'] ?? 'Actualización de envío',
+            'location' => $event['location'] ?? null,
+            'date' => isset($event['date']) ? \Illuminate\Support\Carbon::parse($event['date']) : null,
+        ])->values()->all();
     }
 
     /**

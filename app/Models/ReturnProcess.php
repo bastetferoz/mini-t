@@ -66,10 +66,20 @@ class ReturnProcess extends Model
      * Activos incluidos en el proceso de devolución.
      */
     public function assets()
-{
-    return $this->belongsToMany(
-        Asset::class,
-        'return_process_asset'
-    );
-}
+    {
+        return $this->belongsToMany(
+            Asset::class,
+            'return_process_asset',
+            'return_process_id',
+            'asset'
+        )->withPivot(['returned', 'reason', 'notes']);
+    }
+
+    /**
+     * Envíos asociados a esta devolución.
+     */
+    public function shipments()
+    {
+        return $this->hasMany(ReturnShipment::class);
+    }
 }
