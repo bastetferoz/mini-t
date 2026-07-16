@@ -40,4 +40,9 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-4o'),
     ],
 
+    'enviopack' => [
+        'api_key' => env('ENVIOPACK_API_KEY'),
+        'secret_key' => env('ENVIOPACK_SECRET_KEY'),
+    ],
+
 ];
