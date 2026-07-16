@@ -46,6 +46,7 @@ class AiProfileResource extends Resource
                     'openai' => 'OpenAI (GPT)',
                     'google' => 'Google (Gemini)',
                     'anthropic' => 'Anthropic (Claude)',
+                    'groq' => 'Groq',
                 ]),
 
             Select::make('model')
@@ -59,16 +60,29 @@ class AiProfileResource extends Resource
                         'gpt-4-turbo' => 'GPT-4 Turbo',
                         'gpt-4.1' => 'GPT-4.1',
                         'gpt-4.1-mini' => 'GPT-4.1 Mini',
+                        'o3' => 'o3',
+                        'o3-mini' => 'o3 Mini',
+                        'o4-mini' => 'o4 Mini',
+                        'gpt-5' => 'GPT-5',
                     ],
                     'google' => [
-                        'gemini-2.0-flash' => 'Gemini 2.0 Flash',
+                        'gemini-3.5-flash' => 'Gemini 3.5 Flash (más inteligente)',
+                        'gemini-3.1-flash-lite' => 'Gemini 3.1 Flash-Lite (económico)',
                         'gemini-2.5-flash' => 'Gemini 2.5 Flash',
-                        'gemini-1.5-flash' => 'Gemini 1.5 Flash',
+                        'gemini-2.5-flash-lite' => 'Gemini 2.5 Flash-Lite',
+                        'gemini-2.5-pro' => 'Gemini 2.5 Pro (avanzado)',
                     ],
                     'anthropic' => [
                         'claude-sonnet-4-20250514' => 'Claude Sonnet 4',
                         'claude-3-5-sonnet-20241022' => 'Claude 3.5 Sonnet',
                         'claude-3-5-haiku-20241022' => 'Claude 3.5 Haiku',
+                    ],
+                    'groq' => [
+                        'llama-3.3-70b-versatile' => 'Llama 3.3 70B',
+                        'llama-3.1-8b-instant' => 'Llama 3.1 8B Instant',
+                        'llama-4-scout-17b-16e-instruct' => 'Llama 4 Scout 17B',
+                        'meta-llama/llama-4-maverick-17b-128e-instruct' => 'Llama 4 Maverick 17B',
+                        'mixtral-8x7b-32768' => 'Mixtral 8x7B',
                     ],
                     default => [],
                 })
@@ -161,6 +175,77 @@ class AiProfileResource extends Resource
                             ->body("{$record->name} es ahora el perfil por defecto.")
                             ->success()
                             ->send();
+                    }),
+
+                Action::make('test')
+                    ->label('Test')
+                    ->icon('heroicon-o-play')
+                    ->color('info')
+                    ->action(function ($record) {
+                        try {
+                            $prompt = 'Respondé solo con este JSON: {"status":"ok","model":"' . $record->model . '"}';
+
+                            $response = match ($record->provider) {
+                                'openai', 'groq' => \Illuminate\Support\Facades\Http::withHeaders([
+                                    'Authorization' => "Bearer {$record->api_key}",
+                                ])->timeout(15)->post($record->getEndpointUrl(), [
+                                    'model' => $record->model,
+                                    'messages' => [['role' => 'user', 'content' => $prompt]],
+                                    'max_tokens' => 100,
+                                ]),
+
+                                'google' => \Illuminate\Support\Facades\Http::timeout(15)->post(
+                                    "https://generativelanguage.googleapis.com/v1beta/models/{$record->model}:generateContent?key={$record->api_key}",
+                                    ['contents' => [['parts' => [['text' => $prompt]]]]]
+                                ),
+
+                                'anthropic' => \Illuminate\Support\Facades\Http::withHeaders([
+                                    'x-api-key' => $record->api_key,
+                                    'anthropic-version' => '2023-06-01',
+                                    'content-type' => 'application/json',
+                                ])->timeout(15)->post($record->endpoint ?: 'https://api.anthropic.com/v1/messages', [
+                                    'model' => $record->model,
+                                    'max_tokens' => 100,
+                                    'messages' => [['role' => 'user', 'content' => $prompt]],
+                                ]),
+
+                                default => null,
+                            };
+
+                            if (! $response || ! $response->successful()) {
+                                $body = $response ? substr($response->body(), 0, 200) : 'Sin respuesta';
+                                Notification::make()
+                                    ->title('❌ Error')
+                                    ->body("HTTP {$response?->status()}: {$body}")
+                                    ->danger()
+                                    ->persistent()
+                                    ->send();
+                                return;
+                            }
+
+                            // Extraer el texto de la respuesta según proveedor
+                            $text = match ($record->provider) {
+                                'openai', 'groq' => $response->json('choices.0.message.content'),
+                                'google' => $response->json('candidates.0.content.parts.0.text'),
+                                'anthropic' => $response->json('content.0.text'),
+                                default => 'OK',
+                            };
+
+                            Notification::make()
+                                ->title('✅ Conexión exitosa')
+                                ->body("Respuesta: " . substr($text ?? 'OK', 0, 150))
+                                ->success()
+                                ->persistent()
+                                ->send();
+
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('❌ Excepción')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->persistent()
+                                ->send();
+                        }
                     }),
             ]);
     }

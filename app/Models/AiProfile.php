@@ -44,6 +44,7 @@ class AiProfile extends Model
             'openai' => 'https://api.openai.com/v1/chat/completions',
             'google' => 'https://generativelanguage.googleapis.com/v1beta/models/' . $this->model . ':generateContent',
             'anthropic' => 'https://api.anthropic.com/v1/messages',
+            'groq' => 'https://api.groq.com/openai/v1/chat/completions',
             default => '',
         };
     }

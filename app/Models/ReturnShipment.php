@@ -7,37 +7,22 @@ use Illuminate\Database\Eloquent\Model;
 class ReturnShipment extends Model
 {
     protected $fillable = [
-
         'return_process_id',
-
         'logistics_method',
-
         'carrier',
-
         'tracking_number',
-
         'tracking_status',
-
         'tracking_payload',
-
-        'last_update',
-
         'notes',
-
         'pickup_scheduled_at',
-
         'pickup_contact',
-
+        'last_update',
     ];
 
     protected $casts = [
-
         'tracking_payload' => 'array',
-
-        'last_update' => 'datetime',
-
         'pickup_scheduled_at' => 'datetime',
-
+        'last_update' => 'datetime',
     ];
 
     public function returnProcess()

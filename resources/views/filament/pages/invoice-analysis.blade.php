@@ -1,137 +1,200 @@
 <x-filament-panels::page>
 
     {{-- Filtros --}}
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex flex-wrap items-end gap-4 mb-6">
         <div>
-            <label class="text-xs text-gray-500 uppercase tracking-wide">Año</label>
-            <select wire:model.live="selectedYear" class="block mt-1 rounded-lg border-gray-600 bg-gray-800 text-white text-sm px-3 py-2">
+            <label class="text-xs text-gray-500 uppercase tracking-wide block mb-1">Año</label>
+            <select wire:model.live="selectedYear" class="rounded-lg border-gray-600 bg-gray-800 text-white text-sm px-3 py-2">
                 @foreach ($this->getAvailableYears() as $year)
                     <option value="{{ $year }}">{{ $year }}</option>
                 @endforeach
             </select>
         </div>
         <div>
-            <label class="text-xs text-gray-500 uppercase tracking-wide">Moneda</label>
-            <select wire:model.live="selectedCurrency" class="block mt-1 rounded-lg border-gray-600 bg-gray-800 text-white text-sm px-3 py-2">
-                <option value="ARS">ARS (Pesos)</option>
-                <option value="USD">USD (Dólares)</option>
+            <label class="text-xs text-gray-500 uppercase tracking-wide block mb-1">Vista</label>
+            <select wire:model.live="viewMode" class="rounded-lg border-gray-600 bg-gray-800 text-white text-sm px-3 py-2">
+                <option value="providers">Por proveedor</option>
+                <option value="companies">Por empresa</option>
             </select>
         </div>
     </div>
 
-    {{-- Resumen anual --}}
+    {{-- Checklist: Proveedores --}}
+    <x-filament::card class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase">Proveedores</h3>
+            <div class="flex gap-2">
+                <button wire:click="selectAllProviders" class="text-xs text-amber-400 hover:underline">Todos</button>
+                <button wire:click="deselectAllProviders" class="text-xs text-gray-500 hover:underline">Ninguno</button>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            @foreach($this->getAvailableProviders() as $provider)
+                <label class="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-xs {{ in_array($provider, $selectedProviders) ? 'bg-amber-500/10 text-amber-400' : 'text-gray-500' }}">
+                    <input type="checkbox" wire:click="toggleProvider('{{ $provider }}')" {{ in_array($provider, $selectedProviders) ? 'checked' : '' }} class="rounded border-gray-600 text-amber-500 w-3 h-3">
+                    {{ $this->getProviderLabel($provider) }}
+                </label>
+            @endforeach
+        </div>
+    </x-filament::card>
+
+    {{-- Checklist: Empresas --}}
+    @if(count($this->getAvailableCompanies()) > 0)
+    <x-filament::card class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase">Empresas</h3>
+            <div class="flex gap-2">
+                <button wire:click="selectAllCompanies" class="text-xs text-amber-400 hover:underline">Todas</button>
+                <button wire:click="deselectAllCompanies" class="text-xs text-gray-500 hover:underline">Ninguna</button>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            @foreach($this->getAvailableCompanies() as $company)
+                <label class="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-xs {{ in_array($company, $selectedCompanies) ? 'bg-blue-500/10 text-blue-400' : 'text-gray-500' }}">
+                    <input type="checkbox" wire:click="toggleCompany('{{ $company }}')" {{ in_array($company, $selectedCompanies) ? 'checked' : '' }} class="rounded border-gray-600 text-blue-500 w-3 h-3">
+                    {{ ucfirst($company) }}
+                </label>
+            @endforeach
+        </div>
+    </x-filament::card>
+    @endif
+
     @php
         $comparison = $this->getYearComparison();
         $monthlyData = $this->getMonthlyData();
-        $byProvider = $this->getByProvider();
         $yearTotal = $this->getYearTotal();
+        $monthNames = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     @endphp
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {{-- Total año --}}
+    {{-- Resumen --}}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <x-filament::card>
-            <p class="text-xs text-gray-500 uppercase tracking-wide">Total {{ $selectedYear }}</p>
-            <p class="text-2xl font-bold text-white mt-1">
-                {{ $selectedCurrency }} {{ number_format($yearTotal, 2, ',', '.') }}
-            </p>
+            <p class="text-xs text-gray-500 uppercase">Total {{ $selectedYear }} (USD)</p>
+            <p class="text-xl font-bold text-white mt-1">USD {{ number_format($yearTotal, 2, ',', '.') }}</p>
         </x-filament::card>
-
-        {{-- Año anterior --}}
         <x-filament::card>
-            <p class="text-xs text-gray-500 uppercase tracking-wide">Total {{ (int)$selectedYear - 1 }}</p>
-            <p class="text-2xl font-bold text-white mt-1">
-                {{ $selectedCurrency }} {{ number_format($comparison['previous'], 2, ',', '.') }}
-            </p>
+            <p class="text-xs text-gray-500 uppercase">Total {{ (int)$selectedYear - 1 }} (USD)</p>
+            <p class="text-xl font-bold text-white mt-1">USD {{ number_format($comparison['previous'], 2, ',', '.') }}</p>
         </x-filament::card>
-
-        {{-- Variación --}}
         <x-filament::card>
-            <p class="text-xs text-gray-500 uppercase tracking-wide">Variación interanual</p>
-            <p class="text-2xl font-bold mt-1 {{ $comparison['diff_percent'] > 0 ? 'text-red-400' : 'text-green-400' }}">
+            <p class="text-xs text-gray-500 uppercase">Variación interanual</p>
+            <p class="text-xl font-bold mt-1 {{ $comparison['diff_percent'] > 0 ? 'text-red-400' : 'text-green-400' }}">
                 {{ $comparison['diff_percent'] > 0 ? '+' : '' }}{{ $comparison['diff_percent'] }}%
+            </p>
+        </x-filament::card>
+        <x-filament::card>
+            <p class="text-xs text-gray-500 uppercase">Promedio mensual</p>
+            <p class="text-xl font-bold text-white mt-1">
+                USD {{ number_format($yearTotal > 0 ? $yearTotal / 12 : 0, 2, ',', '.') }}
             </p>
         </x-filament::card>
     </div>
 
-    {{-- Tabla mes a mes --}}
+    {{-- TABLA MES A MES --}}
     <x-filament::card class="mb-6">
-        <h3 class="text-sm font-semibold text-white mb-4">Detalle mensual — {{ $selectedYear }}</h3>
+        <h3 class="text-sm font-semibold text-white mb-4">
+            {{ $viewMode === 'companies' ? 'Por empresa' : 'Por proveedor' }} — mes a mes (USD)
+        </h3>
         <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="w-full text-xs">
                 <thead>
                     <tr class="border-b border-gray-700">
-                        <th class="text-left py-2 px-3 text-gray-400">Mes</th>
-                        <th class="text-right py-2 px-3 text-gray-400">Monto</th>
-                        <th class="text-right py-2 px-3 text-gray-400">% del total</th>
+                        <th class="text-left py-2 px-2 text-gray-400 sticky left-0 bg-gray-900">{{ $viewMode === 'companies' ? 'Empresa' : 'Proveedor' }}</th>
+                        @for($m = 1; $m <= 12; $m++)
+                            <th class="text-right py-2 px-2 text-gray-400">{{ $monthNames[$m] }}</th>
+                        @endfor
+                        <th class="text-right py-2 px-2 text-gray-400 font-bold">Total</th>
                     </tr>
                 </thead>
                 <tbody>
                     @php
-                        $monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                        $tableData = $viewMode === 'companies' ? $this->getMonthlyByCompany() : $this->getMonthlyByProvider();
+                        $monthTotals = array_fill(1, 12, 0);
+                        $grandTotal = 0;
                     @endphp
-                    @foreach ($monthlyData as $period => $total)
+                    @foreach($tableData as $label => $months)
                         @php
-                            $monthIndex = (int) explode('-', $period)[1] - 1;
-                            $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0;
+                            $rowTotal = array_sum($months);
+                            $grandTotal += $rowTotal;
+                            foreach ($months as $m => $val) { $monthTotals[$m] += $val; }
                         @endphp
-                        <tr class="border-b border-gray-800 {{ $total > 0 ? '' : 'opacity-40' }}">
-                            <td class="py-2 px-3 text-gray-300">{{ $monthNames[$monthIndex] }}</td>
-                            <td class="py-2 px-3 text-right text-white font-medium">
-                                {{ $selectedCurrency }} {{ number_format($total, 2, ',', '.') }}
+                        <tr class="border-b border-gray-800 hover:bg-gray-800/50">
+                            <td class="py-2 px-2 text-white font-medium sticky left-0 bg-gray-900">
+                                {{ $viewMode === 'companies' ? ucfirst($label) : $this->getProviderLabel($label) }}
                             </td>
-                            <td class="py-2 px-3 text-right text-gray-400">{{ $percent }}%</td>
+                            @for($m = 1; $m <= 12; $m++)
+                                <td class="py-2 px-2 text-right {{ $months[$m] > 0 ? 'text-gray-300' : 'text-gray-700' }}">
+                                    {{ $months[$m] > 0 ? number_format($months[$m], 0, ',', '.') : '—' }}
+                                </td>
+                            @endfor
+                            <td class="py-2 px-2 text-right text-white font-semibold">
+                                {{ number_format($rowTotal, 0, ',', '.') }}
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr class="border-t-2 border-gray-600">
-                        <td class="py-2 px-3 font-semibold text-white">Total</td>
-                        <td class="py-2 px-3 text-right font-bold text-white">
-                            {{ $selectedCurrency }} {{ number_format($yearTotal, 2, ',', '.') }}
+                        <td class="py-2 px-2 font-bold text-white sticky left-0 bg-gray-900">Total</td>
+                        @for($m = 1; $m <= 12; $m++)
+                            <td class="py-2 px-2 text-right font-bold text-white">
+                                {{ $monthTotals[$m] > 0 ? number_format($monthTotals[$m], 0, ',', '.') : '—' }}
+                            </td>
+                        @endfor
+                        <td class="py-2 px-2 text-right font-bold text-amber-400">
+                            {{ number_format($grandTotal, 0, ',', '.') }}
                         </td>
-                        <td class="py-2 px-3 text-right text-gray-400">100%</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
     </x-filament::card>
 
-    {{-- Desglose por proveedor --}}
-    <x-filament::card>
-        <h3 class="text-sm font-semibold text-white mb-4">Por proveedor — {{ $selectedYear }}</h3>
-        <div class="space-y-3">
-            @forelse ($byProvider as $provider => $total)
-                @php
-                    $providerLabel = match ($provider) {
-                        'telecom' => 'Telecom',
-                        'metrotel' => 'Metrotel',
-                        'amazon' => 'Amazon (AWS)',
-                        'microsoft' => 'Microsoft',
-                        'google' => 'Google',
-                        'movistar' => 'Movistar',
-                        'claro' => 'Claro',
-                        'iplan' => 'iPlan',
-                        'otro' => 'Otro',
-                        default => ucfirst($provider),
-                    };
-                    $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0;
-                @endphp
-                <div>
-                    <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-300">{{ $providerLabel }}</span>
-                        <span class="text-white font-medium">
-                            {{ $selectedCurrency }} {{ number_format($total, 2, ',', '.') }}
-                            <span class="text-gray-500 text-xs">({{ $percent }}%)</span>
-                        </span>
+    {{-- DESGLOSE --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {{-- Por proveedor --}}
+        <x-filament::card>
+            <h3 class="text-sm font-semibold text-white mb-4">Por proveedor</h3>
+            @php $byProvider = $this->getByProvider(); @endphp
+            <div class="space-y-2">
+                @forelse ($byProvider as $provider => $total)
+                    @php $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0; @endphp
+                    <div>
+                        <div class="flex justify-between text-xs mb-0.5">
+                            <span class="text-gray-300">{{ $this->getProviderLabel($provider) }}</span>
+                            <span class="text-white">{{ number_format($total, 0, ',', '.') }} <span class="text-gray-500">({{ $percent }}%)</span></span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-1.5">
+                            <div class="bg-amber-500 h-1.5 rounded-full" style="width: {{ min($percent, 100) }}%"></div>
+                        </div>
                     </div>
-                    <div class="w-full bg-gray-700 rounded-full h-2">
-                        <div class="bg-amber-500 h-2 rounded-full" style="width: {{ $percent }}%"></div>
+                @empty
+                    <p class="text-xs text-gray-500 text-center py-4">Sin datos.</p>
+                @endforelse
+            </div>
+        </x-filament::card>
+
+        {{-- Por empresa --}}
+        <x-filament::card>
+            <h3 class="text-sm font-semibold text-white mb-4">Por empresa</h3>
+            @php $byCompany = $this->getByCompany(); @endphp
+            <div class="space-y-2">
+                @forelse ($byCompany as $company => $total)
+                    @php $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0; @endphp
+                    <div>
+                        <div class="flex justify-between text-xs mb-0.5">
+                            <span class="text-gray-300">{{ ucfirst($company) }}</span>
+                            <span class="text-white">{{ number_format($total, 0, ',', '.') }} <span class="text-gray-500">({{ $percent }}%)</span></span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-1.5">
+                            <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ min($percent, 100) }}%"></div>
+                        </div>
                     </div>
-                </div>
-            @empty
-                <p class="text-sm text-gray-500 text-center py-4">Sin datos para este período.</p>
-            @endforelse
-        </div>
-    </x-filament::card>
+                @empty
+                    <p class="text-xs text-gray-500 text-center py-4">Sin datos de empresa.</p>
+                @endforelse
+            </div>
+        </x-filament::card>
+    </div>
 
 </x-filament-panels::page>

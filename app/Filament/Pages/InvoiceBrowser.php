@@ -43,15 +43,7 @@ class InvoiceBrowser extends Page
 
     public function goToYear(int $year): void
     {
-        // Redirigir al resource con filtros de proveedor y año
-        $url = \App\Filament\Resources\Invoices\InvoiceResource::getUrl('index', [
-            'tableFilters' => [
-                'provider' => ['value' => $this->selectedProvider],
-                'year' => ['value' => $year],
-            ],
-        ]);
-
-        $this->redirect($url);
+        $this->selectedYear = $year;
     }
 
     /**
@@ -130,13 +122,14 @@ class InvoiceBrowser extends Page
             ->label('Cargar con IA')
             ->icon('heroicon-o-sparkles')
             ->color('success')
-            ->modalHeading('Cargar factura con IA')
-            ->modalDescription('Subí una imagen o PDF de la factura. La IA extraerá automáticamente los datos.')
+            ->modalHeading('Cargar facturas con IA')
+            ->modalDescription('Subí una o varias imágenes/PDF. La IA extraerá los datos de cada una.')
             ->modalSubmitActionLabel('Analizar y guardar')
             ->form([
-                FileUpload::make('invoice_file')
-                    ->label('Archivo de factura')
+                FileUpload::make('invoice_files')
+                    ->label('Archivos de factura')
                     ->required()
+                    ->multiple()
                     ->disk('public')
                     ->directory('invoices/temp')
                     ->acceptedFileTypes([
@@ -146,12 +139,12 @@ class InvoiceBrowser extends Page
                         'application/pdf',
                     ])
                     ->maxSize(10240)
-                    ->helperText('Formatos: JPG, PNG, WebP, PDF. Máx 10MB.'),
+                    ->helperText('Podés subir varios archivos. Formatos: JPG, PNG, WebP, PDF. Máx 10MB c/u.'),
             ])
             ->action(function (array $data) {
-                $filePath = $data['invoice_file'];
+                $files = $data['invoice_files'] ?? [];
 
-                if (! $filePath) {
+                if (empty($files)) {
                     Notification::make()
                         ->title('Error')
                         ->body('No se subió ningún archivo.')
@@ -160,71 +153,86 @@ class InvoiceBrowser extends Page
                     return;
                 }
 
-                $parsed = InvoiceParserService::parse($filePath);
+                $profile = \App\Models\AiProfile::getDefault();
 
-                if (! $parsed) {
-                    $profile = \App\Models\AiProfile::getDefault();
-
-                    if (! $profile) {
-                        Notification::make()
-                            ->title('Sin perfil de IA configurado')
-                            ->body('Andá a Administración → IA y creá un perfil marcado como Predeterminado y Activo.')
-                            ->danger()
-                            ->send();
-                        return;
-                    }
-
+                if (! $profile) {
                     Notification::make()
-                        ->title('Error al analizar')
-                        ->body(InvoiceParserService::$lastError ?? 'Error desconocido.')
+                        ->title('Sin perfil de IA configurado')
+                        ->body('Andá a Administración → IA y creá un perfil marcado como Predeterminado y Activo.')
                         ->danger()
-                        ->persistent()
                         ->send();
                     return;
                 }
 
-                $finalPath = InvoiceParserService::organizeFile($filePath, $parsed);
-                $provider = InvoiceParserService::normalizeProvider($parsed['provider'] ?? null);
-                $period = $parsed['period'] ?? now()->format('Y-m');
-                $parts = explode('-', $period);
+                $success = 0;
+                $errors = [];
 
-                $invoice = Invoice::create([
-    'provider' => $provider,
-    'service' => $parsed['service'] ?? null,
-    'amount' => $parsed['amount'] ?? 0,
-    'currency' => $parsed['currency'] ?? 'ARS',
-    'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
-    'period' => $period,
-    'month' => (int) ($parts[1] ?? now()->month),
-    'year' => (int) ($parts[0] ?? now()->year),
-    'invoice_number' => $parsed['invoice_number'] ?? null,
-    'file_path' => $finalPath,
-    'notes' => 'Cargada automáticamente con IA',
-]);
+                foreach ($files as $filePath) {
+                    $parsed = InvoiceParserService::parse($filePath);
 
-// ✅ Tipo de cambio
-if ($invoice->currency === 'ARS') {
-    $rate = \App\Services\ExchangeRateService::getBnaRate(
-        $invoice->invoice_date->format('Y-m-d')
-    );
-    if ($rate) {
-        $invoice->update([
-            'exchange_rate' => $rate,
-            'amount_usd'    => round($invoice->amount / $rate, 2),
-        ]);
-    }
-} elseif ($invoice->currency === 'USD') {
-    $invoice->update([
-        'exchange_rate' => 1,
-        'amount_usd'    => $invoice->amount,
-    ]);
-}
+                    if (! $parsed) {
+                        $errors[] = basename($filePath) . ': ' . (InvoiceParserService::$lastError ?? 'Error desconocido');
+                        continue;
+                    }
 
-                Notification::make()
-                    ->title('Factura cargada')
-                    ->body("Proveedor: {$provider} | Monto: \${$parsed['amount']} | Período: {$period}")
-                    ->success()
-                    ->send();
+                    $finalPath = InvoiceParserService::organizeFile($filePath, $parsed);
+                    $provider = InvoiceParserService::normalizeProvider($parsed['provider'] ?? null);
+                    $period = $parsed['period'] ?? now()->format('Y-m');
+                    $parts = explode('-', $period);
+
+                    $invoice = Invoice::create([
+                        'provider' => $provider,
+                        'company' => $parsed['company'] ?? null,
+                        'service' => $parsed['service'] ?? null,
+                        'reference' => $parsed['reference'] ?? null,
+                        'amount' => $parsed['amount'] ?? 0,
+                        'currency' => $parsed['currency'] ?? 'ARS',
+                        'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
+                        'period' => $period,
+                        'month' => (int) ($parts[1] ?? now()->month),
+                        'year' => (int) ($parts[0] ?? now()->year),
+                        'invoice_number' => $parsed['invoice_number'] ?? null,
+                        'file_path' => $finalPath,
+                        'notes' => 'Cargada automáticamente con IA',
+                    ]);
+
+                    // Tipo de cambio
+                    if ($invoice->currency === 'ARS') {
+                        $rate = \App\Services\ExchangeRateService::getBnaRate(
+                            $invoice->invoice_date->format('Y-m-d')
+                        );
+                        if ($rate) {
+                            $invoice->update([
+                                'exchange_rate' => $rate,
+                                'amount_usd' => round($invoice->amount / $rate, 2),
+                            ]);
+                        }
+                    } elseif ($invoice->currency === 'USD') {
+                        $invoice->update([
+                            'exchange_rate' => 1,
+                            'amount_usd' => $invoice->amount,
+                        ]);
+                    }
+
+                    $success++;
+                }
+
+                // Notificaciones
+                if ($success > 0) {
+                    Notification::make()
+                        ->title("{$success} factura(s) cargada(s)")
+                        ->success()
+                        ->send();
+                }
+
+                if (! empty($errors)) {
+                    Notification::make()
+                        ->title(count($errors) . ' archivo(s) con error')
+                        ->body(implode("\n", array_slice($errors, 0, 5)))
+                        ->danger()
+                        ->persistent()
+                        ->send();
+                }
             });
     }
 

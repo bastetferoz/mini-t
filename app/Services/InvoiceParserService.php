@@ -122,6 +122,8 @@ Extraé los datos de esta factura en formato JSON estricto (sin texto adicional,
 
 {
   "service": "tipo de servicio (Internet, Hosting, Licencias, Telefonía, Cloud, etc.)",
+  "reference": "referencia adicional (dominio, cuenta, nombre de plan, etc.)",
+  "company": "empresa destinataria del gasto si se puede identificar (nova, phinx, etc.) o null",
   "amount": 12345.67,
   "currency": "{$currency}",
   "invoice_date": "YYYY-MM-DD",
@@ -134,6 +136,8 @@ Reglas:
 - "currency": "ARS" para pesos argentinos, "USD" para dólares.
 - "period": el mes al que corresponde el servicio facturado.
 - "invoice_date": fecha de emisión.
+- "company": la empresa que PAGA/IMPUTA este gasto. Solo puede ser una de estas: "phinxlab", "novatech", "cryptopatagonia". Si la factura dice "Phinxlab", "Phinx", "Dinmax", "Velned", "Datanova", "Technology Advisors", "llanmetal", "dmxconsulting", "tradingwasp", "holapepper", "newiter" → es "phinxlab". Si dice "Nova", "Novatech", "Aganon", "nvt-usa", "palitocapital" → es "novatech". Si dice "Cryptopatagonia" → es "cryptopatagonia". Si no podés determinar, usá null.
+- "reference": info adicional como dominio facturado, número de cuenta, plan, etc.
 - Si no podés determinar un campo, usá null.
 PROMPT;
     }
@@ -161,6 +165,7 @@ PROMPT;
             'openai' => self::callOpenAI($profile, $base64, $mimeType, $prompt),
             'google' => self::callGemini($profile, $base64, $mimeType, $prompt),
             'anthropic' => self::callAnthropic($profile, $base64, $mimeType, $prompt),
+            'groq' => self::callOpenAI($profile, $base64, $mimeType, $prompt), // Groq usa formato OpenAI
             default => null,
         };
     }

@@ -8,7 +8,10 @@ class Invoice extends Model
 {
     protected $fillable = [
         'provider',
+        'company',
+        'project',
         'service',
+        'reference',
         'amount',
         'currency',
         'invoice_date',

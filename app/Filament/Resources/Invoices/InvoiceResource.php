@@ -40,9 +40,30 @@ class InvoiceResource extends Resource
                 ->searchable()
                 ->options(fn () => \App\Models\InvoiceProvider::getOptions() + ['otro' => 'Otro']),
 
+            Select::make('company')
+                ->label('Empresa')
+                ->searchable()
+                ->options([
+                    'phinxlab' => 'Phinxlab',
+                    'novatech' => 'Novatech',
+                    'cryptopatagonia' => 'Cryptopatagonia',
+                ])
+                ->nullable()
+                ->helperText('Empresa a la que se imputa este gasto.'),
+
+            TextInput::make('project')
+                ->label('Proyecto / Cuenta')
+                ->placeholder('odoo, ster, choir...')
+                ->nullable(),
+
             TextInput::make('service')
                 ->label('Servicio')
                 ->placeholder('Internet, Hosting, Licencias...')
+                ->nullable(),
+
+            TextInput::make('reference')
+                ->label('Referencia')
+                ->placeholder('Dominio, cuenta AWS, etc.')
                 ->nullable(),
 
             TextInput::make('amount')
@@ -121,6 +142,12 @@ class InvoiceResource extends Resource
                     ->label('Servicio')
                     ->searchable(),
 
+                TextColumn::make('reference')
+                    ->label('Referencia')
+                    ->searchable()
+                    ->toggleable()
+                    ->description(fn ($record) => $record->company ? ucfirst($record->company) : null),
+
                 TextColumn::make('amount')
                     ->label('Monto')
                     ->money(fn ($record) => $record->currency)
@@ -181,11 +208,54 @@ class InvoiceResource extends Resource
                     ->options(fn () => Invoice::selectRaw('DISTINCT year')->orderByDesc('year')->pluck('year', 'year')->toArray()),
             ])
             ->recordActions([
+                \Filament\Actions\Action::make('asignar_empresa')
+                    ->label(fn ($record) => $record->company ? ucfirst($record->company) : 'Sin empresa')
+                    ->icon('heroicon-o-building-office')
+                    ->color(fn ($record) => $record->company ? 'success' : 'warning')
+                    ->size('sm')
+                    ->form([
+                        \Filament\Forms\Components\Select::make('company')
+                            ->label('Empresa')
+                            ->options([
+                                'phinxlab' => 'Phinxlab',
+                                'novatech' => 'Novatech',
+                                'cryptopatagonia' => 'Cryptopatagonia',
+                            ])
+                            ->required()
+                            ->default(fn ($record) => $record->company),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $record->update(['company' => $data['company']]);
+                        \Filament\Notifications\Notification::make()
+                            ->title('Empresa asignada')
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    \Filament\Actions\BulkAction::make('asignar_empresa_masivo')
+                        ->label('Asignar empresa')
+                        ->icon('heroicon-o-building-office')
+                        ->form([
+                            \Filament\Forms\Components\Select::make('company')
+                                ->label('Empresa')
+                                ->options([
+                                    'phinxlab' => 'Phinxlab',
+                                    'novatech' => 'Novatech',
+                                    'cryptopatagonia' => 'Cryptopatagonia',
+                                ])
+                                ->required(),
+                        ])
+                        ->action(function ($records, array $data) {
+                            $records->each(fn ($record) => $record->update(['company' => $data['company']]));
+                            \Filament\Notifications\Notification::make()
+                                ->title(count($records) . ' facturas actualizadas')
+                                ->success()
+                                ->send();
+                        }),
                 ]),
             ]);
     }
