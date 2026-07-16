@@ -7,14 +7,11 @@ use App\Models\Assignment;
 use App\Models\Person;
 use App\Models\ReturnProcess;
 use App\Models\ReturnShipment;
+use App\Services\TrackingService;
 use Filament\Notifications\Notification;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-
-
-
-
 
 class PendingReturns extends Widget
 {
@@ -36,6 +33,9 @@ class PendingReturns extends Widget
     public string $pickupScheduledAt = '';
     public string $pickupContact = '';
     public string $logisticsNotes = '';
+
+    // Estado de edición del envío
+    public bool $editingShipment = false;
 
     public function mount(): void
     {
@@ -70,6 +70,7 @@ class PendingReturns extends Widget
     public function selectPerson(?int $personId): void
     {
         $this->selectedPersonId = $personId;
+        $this->editingShipment = false;
         $this->resetLogisticsForm();
     }
 
@@ -125,7 +126,7 @@ class PendingReturns extends Widget
 
         $process = ReturnProcess::firstOrCreate(['person_id' => $this->selectedPersonId]);
 
-        ReturnShipment::updateOrCreate(
+        $shipment = ReturnShipment::updateOrCreate(
             ['return_process_id' => $process->id],
             [
                 'logistics_method' => $data['method'],
@@ -138,27 +139,132 @@ class PendingReturns extends Widget
             ]
         );
 
+        // Si es EnvíoPack, intentar consultar el tracking inmediatamente
+        if ($data['method'] === 'enviopack' && filled($data['tracking_number'])) {
+            $this->fetchTrackingForShipment($shipment);
+        }
+
         Notification::make()
             ->title('Logística de devolución guardada')
             ->success()
             ->send();
 
+        $this->editingShipment = false;
         $this->resetLogisticsForm();
+    }
+
+    /**
+     * Activa el modo edición para corregir el número de seguimiento.
+     */
+    public function editShipment(): void
+    {
+        $shipment = $this->getSelectedShipment();
+
+        if (! $shipment) {
+            return;
+        }
+
+        $this->editingShipment = true;
+        $this->logisticsMethod = $shipment->logistics_method ?? 'enviopack';
+        $this->trackingNumber = $shipment->tracking_number ?? '';
+        $this->logisticsNotes = $shipment->notes ?? '';
+        $this->pickupScheduledAt = $shipment->pickup_scheduled_at?->format('Y-m-d\TH:i') ?? '';
+        $this->pickupContact = $shipment->pickup_contact ?? '';
+    }
+
+    /**
+     * Cancela la edición sin guardar.
+     */
+    public function cancelEdit(): void
+    {
+        $this->editingShipment = false;
+        $this->resetLogisticsForm();
+    }
+
+    /**
+     * Fuerza una actualización del tracking desde la API de EnvíoPack.
+     */
+    public function refreshTracking(): void
+    {
+        $shipment = $this->getSelectedShipment();
+
+        if (! $shipment || ! $shipment->tracking_number) {
+            Notification::make()
+                ->title('No hay número de seguimiento')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $updated = $this->fetchTrackingForShipment($shipment);
+
+        if ($updated) {
+            Notification::make()
+                ->title('Seguimiento actualizado')
+                ->success()
+                ->send();
+        } else {
+            Notification::make()
+                ->title('No se pudo actualizar')
+                ->body('Verificá que el número de seguimiento sea correcto o que las credenciales de EnvíoPack estén configuradas.')
+                ->warning()
+                ->send();
+        }
+    }
+
+    /**
+     * Consulta la API de EnvíoPack y actualiza el shipment con los datos obtenidos.
+     */
+    protected function fetchTrackingForShipment(ReturnShipment $shipment): bool
+    {
+        $service = app(TrackingService::class);
+
+        if (! $service->isConfigured()) {
+            return false;
+        }
+
+        $result = $service->track($shipment->tracking_number);
+
+        if (! $result) {
+            return false;
+        }
+
+        $shipment->update([
+            'tracking_status' => $result['status'],
+            'tracking_payload' => [
+                'events' => $result['events'],
+                'status_raw' => $result['status_raw'] ?? null,
+            ],
+            'last_update' => now(),
+        ]);
+
+        return true;
     }
 
     public function getMetrics(): array
     {
-        $shipments = ReturnShipment::query();
-
         return [
             'pending' => Assignment::withTrashed()
                 ->whereHas('asset', fn ($query) => $query->where('status', 'in_transit'))
                 ->whereNotNull('person_id')
                 ->distinct('person_id')
                 ->count('person_id'),
-            'in_transit' => (clone $shipments)->whereIn('tracking_status', ['in_transit', 'En tránsito'])->count(),
-            'delivered' => (clone $shipments)->whereIn('tracking_status', ['delivered', 'Entregado'])->count(),
-            'delayed' => Asset::where('status', 'in_transit')->get()->filter(fn ($asset) => $asset->updated_at?->diffInDays(now()) >= 7)->count(),
+
+            'in_transit' => ReturnShipment::whereIn('tracking_status', ['in_transit', 'picked_up'])
+                ->whereHas('returnProcess')
+                ->distinct('return_process_id')
+                ->count('return_process_id'),
+
+            'delivered' => ReturnShipment::where('tracking_status', 'delivered')
+                ->whereHas('returnProcess')
+                ->distinct('return_process_id')
+                ->count('return_process_id'),
+
+            'delayed' => Person::whereHas('assignments', function ($q) {
+                    $q->withTrashed()->whereHas('asset', fn ($aq) => $aq->where('status', 'in_transit'));
+                })
+                ->where('updated_at', '<=', now()->subDays(15))
+                ->count(),
         ];
     }
 
@@ -171,6 +277,30 @@ class PendingReturns extends Widget
             'location' => $event['location'] ?? null,
             'date' => isset($event['date']) ? \Illuminate\Support\Carbon::parse($event['date']) : null,
         ])->values()->all();
+    }
+
+    /**
+     * Retorna el label legible del estado de tracking.
+     */
+    public function getTrackingStatusLabel(?ReturnShipment $shipment): string
+    {
+        if (! $shipment) {
+            return 'Pendiente de coordinación';
+        }
+
+        return TrackingService::statusLabel($shipment->tracking_status ?? 'pending_tracking');
+    }
+
+    /**
+     * Retorna el color del estado de tracking.
+     */
+    public function getTrackingStatusColor(?ReturnShipment $shipment): string
+    {
+        if (! $shipment) {
+            return 'gray';
+        }
+
+        return TrackingService::statusColor($shipment->tracking_status ?? 'pending_tracking');
     }
 
     /**
