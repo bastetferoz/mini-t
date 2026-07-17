@@ -72,12 +72,6 @@ class PendingReturns extends Widget
         $this->selectedPersonId = $personId;
         $this->editingShipment = false;
         $this->resetLogisticsForm();
-
-        // Auto-actualizar tracking al seleccionar
-        $shipment = $this->getSelectedShipment();
-        if ($shipment && $shipment->tracking_number && $shipment->tracking_status !== 'delivered') {
-            $this->fetchTrackingForShipment($shipment);
-        }
     }
 
     public function resetLogisticsForm(): void
