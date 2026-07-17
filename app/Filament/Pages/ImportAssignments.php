@@ -17,6 +17,10 @@ use Filament\Forms\Concerns\InteractsWithForms;
 
 use Filament\Schemas\Schema;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
 class ImportAssignments extends Page implements HasForms
 {
     use InteractsWithForms;
@@ -30,6 +34,8 @@ class ImportAssignments extends Page implements HasForms
     protected static ?string $title = 'Importar asignaciones';
 
     public ?array $data = [];
+
+    public ?array $backupData = [];
 
     public function form(Schema $schema): Schema
     {
@@ -46,6 +52,119 @@ class ImportAssignments extends Page implements HasForms
 
             ])
             ->statePath('data');
+    }
+
+    public function backupForm(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+
+                FileUpload::make('backup_file')
+                    ->label('Archivo SQL de backup')
+                    ->required()
+                    ->acceptedFileTypes([
+                        'application/sql',
+                        'text/plain',
+                        'application/octet-stream',
+                    ]),
+
+            ])
+            ->statePath('backupData');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Exportar Backup
+    |--------------------------------------------------------------------------
+    */
+
+    public function exportBackup(): StreamedResponse
+    {
+        $host = config('database.connections.mysql.host');
+        $port = config('database.connections.mysql.port');
+        $database = config('database.connections.mysql.database');
+        $username = config('database.connections.mysql.username');
+        $password = config('database.connections.mysql.password');
+
+        $filename = 'backup_' . $database . '_' . now()->format('Y-m-d_His') . '.sql';
+
+        return response()->streamDownload(function () use ($host, $port, $database, $username, $password) {
+            $command = sprintf(
+                'mysqldump -h%s -P%s -u%s -p%s %s 2>/dev/null',
+                escapeshellarg($host),
+                escapeshellarg($port),
+                escapeshellarg($username),
+                escapeshellarg($password),
+                escapeshellarg($database)
+            );
+
+            passthru($command);
+        }, $filename, [
+            'Content-Type' => 'application/sql',
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Importar Backup
+    |--------------------------------------------------------------------------
+    */
+
+    public function importBackup(): void
+    {
+        $file = collect($this->backupData['backup_file'])->first();
+
+        if (! $file) {
+            Notification::make()
+                ->title('Archivo inválido')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $path = $file->getRealPath();
+
+        $host = config('database.connections.mysql.host');
+        $port = config('database.connections.mysql.port');
+        $database = config('database.connections.mysql.database');
+        $username = config('database.connections.mysql.username');
+        $password = config('database.connections.mysql.password');
+
+        $command = sprintf(
+            'mysql -h%s -P%s -u%s -p%s %s < %s 2>&1',
+            escapeshellarg($host),
+            escapeshellarg($port),
+            escapeshellarg($username),
+            escapeshellarg($password),
+            escapeshellarg($database),
+            escapeshellarg($path)
+        );
+
+        exec($command, $output, $exitCode);
+
+        if ($exitCode !== 0) {
+            Notification::make()
+                ->title('Error al importar backup')
+                ->body(implode("\n", $output))
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Backup importado correctamente')
+            ->success()
+            ->send();
+    }
+
+    protected function getForms(): array
+    {
+        return [
+            'form',
+            'backupForm',
+        ];
     }
 
     protected function getFormActions(): array
