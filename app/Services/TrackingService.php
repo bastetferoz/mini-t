@@ -3,97 +3,23 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class TrackingService
 {
-    protected string $apiKey;
-    protected string $secretKey;
-    protected string $baseUrl = 'https://api.enviopack.com';
-    protected ?string $accessToken = null;
-
-    public function __construct()
-    {
-        $this->apiKey = (string) config('services.enviopack.api_key');
-        $this->secretKey = (string) config('services.enviopack.secret_key');
-    }
-
-    /**
-     * Obtiene un access_token mediante OAuth (API Key + Secret Key).
-     */
-    protected function authenticate(): ?string
-    {
-        if ($this->accessToken) {
-            return $this->accessToken;
-        }
-
-        // Intentar obtener del cache
-        $cached = Cache::get('enviopack_access_token');
-        if ($cached) {
-            $this->accessToken = $cached;
-            return $this->accessToken;
-        }
-
-        if (empty($this->apiKey) || empty($this->secretKey)) {
-            Log::warning('TrackingService: Credenciales de EnvíoPack no configuradas.');
-            return null;
-        }
-
-        try {
-            $response = Http::asForm()->post("{$this->baseUrl}/auth", [
-                'api-key' => $this->apiKey,
-                'secret-key' => $this->secretKey,
-            ]);
-
-            if ($response->successful()) {
-                $token = $response->json('token');
-                // Cachear por 50 minutos (el token dura 60 min normalmente)
-                Cache::put('enviopack_access_token', $token, now()->addMinutes(50));
-                $this->accessToken = $token;
-                return $this->accessToken;
-            }
-
-            Log::error('TrackingService: Error de autenticación EnvíoPack', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('TrackingService: Excepción al autenticar', [
-                'message' => $e->getMessage(),
-            ]);
-        }
-
-        return null;
-    }
+    protected string $baseUrl = 'https://api.enviopack.com/tracking';
 
     /**
      * Consulta el estado de un envío por número de tracking.
-     *
-     * Retorna un array normalizado:
-     * [
-     *   'status' => 'En tránsito',
-     *   'last_update' => Carbon,
-     *   'events' => [
-     *     ['date' => '...', 'status' => '...', 'location' => '...'],
-     *   ],
-     * ]
+     * Endpoint público, no requiere credenciales.
      */
     public function track(string $trackingNumber): ?array
     {
-        $token = $this->authenticate();
-
-        if (!$token) {
-            return null;
-        }
-
         try {
-            $response = Http::withHeaders([
-                'Authorization' => "Bearer {$token}",
-            ])->timeout(15)->get("{$this->baseUrl}/envios/{$trackingNumber}");
+            $response = Http::timeout(15)->get("{$this->baseUrl}/{$trackingNumber}");
 
-            if (!$response->successful()) {
-                Log::warning("TrackingService: Error al consultar envío {$trackingNumber}", [
+            if (! $response->successful()) {
+                Log::warning("TrackingService: Error al consultar {$trackingNumber}", [
                     'status' => $response->status(),
                     'body' => substr($response->body(), 0, 300),
                 ]);
@@ -102,9 +28,18 @@ class TrackingService
 
             $data = $response->json();
 
+            // La API devuelve un array, tomamos el primer resultado
+            if (is_array($data) && isset($data[0])) {
+                $data = $data[0];
+            }
+
+            if (empty($data) || ! isset($data['tracking'])) {
+                return null;
+            }
+
             return $this->normalizeResponse($data);
         } catch (\Throwable $e) {
-            Log::error("TrackingService: Excepción al consultar envío {$trackingNumber}", [
+            Log::error("TrackingService: Excepción al consultar {$trackingNumber}", [
                 'message' => $e->getMessage(),
             ]);
             return null;
@@ -112,80 +47,100 @@ class TrackingService
     }
 
     /**
-     * Normaliza la respuesta de la API de EnvíoPack a nuestro formato interno.
+     * Normaliza la respuesta de EnvíoPack.
+     *
+     * Formato de entrada:
+     * {
+     *   "tracking_number": "2035EP013090165R",
+     *   "correo": {"id": "urbano", "nombre": "Urbano"},
+     *   "localidad": "Mar del Plata",
+     *   "provincia": "Buenos Aires",
+     *   "tracking": [
+     *     {"fecha": "14 de julio 10:20", "mensaje": "...", "codigo": "INLD"},
+     *     ...
+     *   ],
+     *   "fecha_estimada_de_entrega": "05/08/2026"
+     * }
      */
     protected function normalizeResponse(array $data): array
     {
         $events = [];
-
-        // EnvíoPack devuelve los eventos en un array "tracking" o "historial"
-        $rawEvents = $data['tracking'] ?? $data['historial'] ?? $data['eventos'] ?? [];
+        $rawEvents = $data['tracking'] ?? [];
 
         foreach ($rawEvents as $event) {
             $events[] = [
-                'date' => $event['fecha'] ?? $event['date'] ?? $event['created_at'] ?? null,
-                'status' => $event['estado'] ?? $event['status'] ?? $event['descripcion'] ?? 'Actualización',
-                'location' => $event['ubicacion'] ?? $event['location'] ?? $event['sucursal'] ?? null,
+                'date' => $event['fecha'] ?? null,
+                'status' => $event['mensaje'] ?? $event['codigo'] ?? 'Actualización',
+                'location' => $data['localidad'] ?? null,
+                'code' => $event['codigo'] ?? null,
             ];
         }
 
-        // Determinar el estado actual
-        $currentStatus = $data['estado'] ?? $data['status'] ?? null;
-
-        if (!$currentStatus && !empty($events)) {
-            $currentStatus = $events[0]['status'] ?? 'Desconocido';
-        }
-
-        // Normalizar el estado a nuestros valores internos
-        $normalizedStatus = $this->normalizeStatus($currentStatus);
+        // El último evento es el estado actual
+        $lastEvent = end($rawEvents);
+        $currentCode = $lastEvent['codigo'] ?? null;
 
         return [
-            'status' => $normalizedStatus,
-            'status_raw' => $currentStatus,
-            'last_update' => $data['ultima_actualizacion'] ?? $data['updated_at'] ?? now()->toIso8601String(),
+            'status' => $this->normalizeStatus($currentCode, $lastEvent['mensaje'] ?? null),
+            'status_raw' => $lastEvent['mensaje'] ?? $currentCode,
+            'carrier' => $data['correo']['nombre'] ?? 'EnvíoPack',
+            'destination' => trim(($data['localidad'] ?? '') . ', ' . ($data['provincia'] ?? ''), ', '),
+            'estimated_delivery' => $data['fecha_estimada_de_entrega'] ?? null,
+            'last_update' => $lastEvent['fecha'] ?? now()->toIso8601String(),
             'events' => $events,
         ];
     }
 
     /**
-     * Mapea estados de EnvíoPack a estados internos del sistema.
+     * Mapea códigos de EnvíoPack a estados internos.
+     *
+     * Códigos conocidos:
+     * INLD = Ingresado / Listo para despacho
+     * COLE = Colectado (el correo lo tiene)
+     * RETI = Retirado
+     * ENTR = Entregado
+     * DEVU = Devuelto
+     * ENVI = Enviado / En tránsito
+     * REPO = En reparto
      */
-    protected function normalizeStatus(?string $status): string
+    protected function normalizeStatus(?string $code, ?string $message): string
     {
-        if (!$status) {
-            return 'pending_tracking';
+        if ($code) {
+            return match (strtoupper($code)) {
+                'INLD' => 'pending_tracking',
+                'COLE' => 'picked_up',
+                'RETI' => 'picked_up',
+                'ENVI' => 'in_transit',
+                'REPO' => 'in_transit',
+                'ENTR' => 'delivered',
+                'DEVU' => 'returned',
+                default => 'in_transit',
+            };
         }
 
-        $status = mb_strtolower(trim($status));
+        // Fallback por mensaje
+        if ($message) {
+            $msg = mb_strtolower($message);
+            return match (true) {
+                str_contains($msg, 'entregado') => 'delivered',
+                str_contains($msg, 'retirado') => 'picked_up',
+                str_contains($msg, 'tránsito'), str_contains($msg, 'reparto') => 'in_transit',
+                str_contains($msg, 'devuelto') => 'returned',
+                default => 'in_transit',
+            };
+        }
 
-        // Mapeo de estados comunes de EnvíoPack
-        return match (true) {
-            str_contains($status, 'entregado') => 'delivered',
-            str_contains($status, 'en camino'),
-            str_contains($status, 'en tránsito'),
-            str_contains($status, 'transito'),
-            str_contains($status, 'en viaje') => 'in_transit',
-            str_contains($status, 'en planta'),
-            str_contains($status, 'en sucursal'),
-            str_contains($status, 'en distribución') => 'in_transit',
-            str_contains($status, 'retirado'),
-            str_contains($status, 'retiro') => 'picked_up',
-            str_contains($status, 'devuelto'),
-            str_contains($status, 'devolucion') => 'returned',
-            str_contains($status, 'cancelado') => 'cancelled',
-            str_contains($status, 'pendiente'),
-            str_contains($status, 'creado') => 'pending_tracking',
-            default => 'in_transit',
-        };
+        return 'pending_tracking';
     }
 
     /**
-     * Retorna el label en español del estado normalizado.
+     * Label en español del estado.
      */
     public static function statusLabel(string $status): string
     {
         return match ($status) {
             'pending_tracking' => 'Pendiente',
+            'pickup_scheduled' => 'Retiro programado',
             'picked_up' => 'Retirado',
             'in_transit' => 'En tránsito',
             'delivered' => 'Entregado',
@@ -196,12 +151,13 @@ class TrackingService
     }
 
     /**
-     * Retorna el color badge para Filament.
+     * Color badge para Filament.
      */
     public static function statusColor(string $status): string
     {
         return match ($status) {
             'pending_tracking' => 'gray',
+            'pickup_scheduled' => 'info',
             'picked_up' => 'info',
             'in_transit' => 'warning',
             'delivered' => 'success',
@@ -212,10 +168,10 @@ class TrackingService
     }
 
     /**
-     * Verifica si las credenciales están configuradas.
+     * No requiere credenciales — endpoint público.
      */
     public function isConfigured(): bool
     {
-        return !empty($this->apiKey) && !empty($this->secretKey);
+        return true;
     }
 }

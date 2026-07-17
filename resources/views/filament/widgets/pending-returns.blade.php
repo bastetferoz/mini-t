@@ -141,7 +141,7 @@
             </section>
 
             {{-- Panel de seguimiento --}}
-            <aside class="rounded-xl border border-gray-800 bg-gray-950/50 xl:col-span-5">
+            <aside class="rounded-xl border border-gray-800 bg-gray-950/50 xl:col-span-5 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
                 <div class="border-b border-gray-800 px-5 py-4">
                     <h2 class="text-lg font-semibold">Seguimiento de devolución</h2>
                 </div>
@@ -299,7 +299,7 @@
                                         {{ $trackingStatusLabel }}
                                     </span>
                                     @if ($shipment->last_update)
-                                        <span class="text-xs text-gray-500">{{ $shipment->last_update->format('d/m/Y H:i') }}</span>
+                                        <span class="text-xs text-gray-500">{{ is_string($shipment->last_update) ? $shipment->last_update : $shipment->last_update?->format('d/m/Y H:i') }}</span>
                                     @endif
                                 </div>
                             </div>
@@ -319,7 +319,7 @@
                                                 <div class="flex justify-between gap-3">
                                                     <p class="text-sm font-medium">{{ $event['status'] }}</p>
                                                     @if ($event['date'])
-                                                        <p class="shrink-0 text-xs text-gray-500">{{ $event['date']->format('d/m/Y H:i') }}</p>
+                                                        <p class="shrink-0 text-xs text-gray-500">{{ $event['date'] }}</p>
                                                     @endif
                                                 </div>
                                                 @if ($event['location'])

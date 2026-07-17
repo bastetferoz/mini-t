@@ -72,6 +72,12 @@ class PendingReturns extends Widget
         $this->selectedPersonId = $personId;
         $this->editingShipment = false;
         $this->resetLogisticsForm();
+
+        // Auto-actualizar tracking al seleccionar
+        $shipment = $this->getSelectedShipment();
+        if ($shipment && $shipment->tracking_number && $shipment->tracking_status !== 'delivered') {
+            $this->fetchTrackingForShipment($shipment);
+        }
     }
 
     public function resetLogisticsForm(): void
@@ -275,7 +281,7 @@ class PendingReturns extends Widget
         return collect($events)->map(fn ($event) => [
             'status' => $event['status'] ?? 'Actualización de envío',
             'location' => $event['location'] ?? null,
-            'date' => isset($event['date']) ? \Illuminate\Support\Carbon::parse($event['date']) : null,
+            'date' => $event['date'] ?? null,
         ])->values()->all();
     }
 

@@ -37,6 +37,12 @@ class ImportAssignments extends Page implements HasForms
 
     public ?array $backupData = [];
 
+    public static function canAccess(): bool
+    {
+        return auth()->user()->hasRole('admin') ||
+               auth()->user()->hasRole('it');
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema
