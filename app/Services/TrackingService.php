@@ -69,7 +69,7 @@ class TrackingService
 
         foreach ($rawEvents as $event) {
             $events[] = [
-                'date' => $event['fecha'] ?? null,
+                'date' => $this->parseEnviopackDate($event['fecha'] ?? null),
                 'status' => $event['mensaje'] ?? $event['codigo'] ?? 'Actualización',
                 'location' => $data['localidad'] ?? null,
                 'code' => $event['codigo'] ?? null,
@@ -86,9 +86,69 @@ class TrackingService
             'carrier' => $data['correo']['nombre'] ?? 'EnvíoPack',
             'destination' => trim(($data['localidad'] ?? '') . ', ' . ($data['provincia'] ?? ''), ', '),
             'estimated_delivery' => $data['fecha_estimada_de_entrega'] ?? null,
-            'last_update' => $lastEvent['fecha'] ?? now()->toIso8601String(),
+            'last_update' => $this->parseEnviopackDate($lastEvent['fecha'] ?? null) ?? now()->toIso8601String(),
             'events' => $events,
         ];
+    }
+
+    /**
+     * Convierte fechas en formato español de EnvíoPack al formato ISO 8601.
+     *
+     * EnvíoPack devuelve fechas como:
+     *   - "14 de julio 10:20"       → sin año, asume año actual
+     *   - "14 de julio 2025 10:20"  → con año explícito
+     *   - "05/08/2026"              → fecha simple sin hora
+     *
+     * Retorna null si el valor es nulo o no puede parsearse.
+     */
+    protected function parseEnviopackDate(?string $fecha): ?string
+    {
+        if (empty($fecha)) {
+            return null;
+        }
+
+        static $months = [
+            'enero' => '01', 'febrero' => '02', 'marzo' => '03',
+            'abril' => '04', 'mayo' => '05', 'junio' => '06',
+            'julio' => '07', 'agosto' => '08', 'septiembre' => '09',
+            'octubre' => '10', 'noviembre' => '11', 'diciembre' => '12',
+        ];
+
+        // Formato: "14 de julio 10:20" o "14 de julio 2025 10:20"
+        if (preg_match('/(\d{1,2})\s+de\s+(\w+)(?:\s+(\d{4}))?\s+(\d{1,2}:\d{2})/iu', $fecha, $m)) {
+            $day   = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+            $month = $months[mb_strtolower($m[2])] ?? null;
+            $year  = $m[3] ?: now()->year;
+            $time  = $m[4];
+
+            if ($month) {
+                return "{$year}-{$month}-{$day} {$time}:00";
+            }
+        }
+
+        // Formato: "14 de julio 2025" (sin hora)
+        if (preg_match('/(\d{1,2})\s+de\s+(\w+)\s+(\d{4})/iu', $fecha, $m)) {
+            $day   = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+            $month = $months[mb_strtolower($m[2])] ?? null;
+            $year  = $m[3];
+
+            if ($month) {
+                return "{$year}-{$month}-{$day} 00:00:00";
+            }
+        }
+
+        // Formato: "05/08/2026" (dd/mm/yyyy)
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $fecha, $m)) {
+            return "{$m[3]}-{$m[2]}-{$m[1]} 00:00:00";
+        }
+
+        // Último recurso: intentar Carbon con silencio
+        try {
+            return \Carbon\Carbon::parse($fecha)->toIso8601String();
+        } catch (\Throwable) {
+            Log::warning("TrackingService: no se pudo parsear fecha '{$fecha}'");
+            return null;
+        }
     }
 
     /**

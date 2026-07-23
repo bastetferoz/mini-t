@@ -36,8 +36,9 @@ class MailTemplateService
                 return false;
             }
 
-            // Destinatario principal
+            // Destinatario principal (prioridad: argumento > plantilla > variable email > SMTP default)
             $email = $toEmail
+                ?? $template->schedule_to
                 ?? ($variables['email'] ?? null)
                 ?? $smtp->default_to;
 
@@ -68,19 +69,25 @@ class MailTemplateService
                 'mail.from.name'               => $smtp->from_name,
             ]);
 
-            Mail::html($body, function ($message) use ($email, $subject, $smtp) {
+            Mail::html($body, function ($message) use ($email, $subject, $smtp, $template) {
                 $message->to($email)
                     ->subject($subject);
 
-                // CC separados por ;
-                if (! empty($smtp->cc_addresses)) {
-                    $ccList = array_filter(
-                        array_map('trim', explode(';', $smtp->cc_addresses))
-                    );
+                // CC: combinar los de la plantilla + los del perfil SMTP
+                $ccSources = array_filter([
+                    $template->schedule_cc ?? null,
+                    $smtp->cc_addresses ?? null,
+                ]);
 
-                    if (! empty($ccList)) {
-                        $message->cc($ccList);
-                    }
+                $ccList = [];
+                foreach ($ccSources as $source) {
+                    $ccList = array_merge($ccList, array_map('trim', explode(';', $source)));
+                }
+
+                $ccList = array_filter(array_unique($ccList));
+
+                if (! empty($ccList)) {
+                    $message->cc($ccList);
                 }
             });
 

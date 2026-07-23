@@ -14,10 +14,11 @@
         </div>
     </x-filament::section>
 
-    {{-- Sección: Backup de Base de Datos --}}
+    {{-- Sección: Backup de Base de Datos (solo admin) --}}
+    @if(auth()->user()->hasRole('admin'))
     <x-filament::section class="mt-6">
         <x-slot name="heading">Backup de Base de Datos</x-slot>
-        <x-slot name="description">Exporta o importa un backup completo de la base de datos (formato SQL).</x-slot>
+        <x-slot name="description">Exporta o importa un backup completo de la base de datos (formato SQL). ⚠️ La importación sobreescribe todos los datos.</x-slot>
 
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 
@@ -36,7 +37,7 @@
             <div class="space-y-3">
                 <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Importar backup</h3>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Sube un archivo .sql para restaurar la base de datos. Esto sobreescribirá los datos actuales.
+                    Sube un archivo .sql para restaurar la base de datos.
                 </p>
 
                 {{ $this->backupForm }}
@@ -48,5 +49,6 @@
 
         </div>
     </x-filament::section>
+    @endif
 
 </x-filament-panels::page>

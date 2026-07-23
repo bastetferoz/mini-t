@@ -55,15 +55,6 @@ class SmtpProfileForm
                     ->label('Nombre remitente')
                     ->default('IT'),
 
-                TextInput::make('default_to')
-                    ->label('Destinatario por defecto')
-                    ->email(),
-
-                TextInput::make('cc_addresses')
-                    ->label('CC')
-                    ->placeholder('rrhh@empresa.com;gerencia@empresa.com')
-                    ->helperText('Ingresá varios correos separados por punto y coma (;).'),
-
                 Toggle::make('is_active')
                     ->label('Activo')
                     ->default(true),

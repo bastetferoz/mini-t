@@ -180,7 +180,18 @@
                 @if ($shipment->last_update)
                     <div class="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
                         <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Última actualización</p>
-                        <p class="text-sm font-medium text-white">{{ $shipment->last_update->format('d/m/Y H:i') }}</p>
+                        <p class="text-sm font-medium text-white">
+                            @php
+                                try {
+                                    $lastUpdateFormatted = $shipment->last_update instanceof \Carbon\Carbon
+                                        ? $shipment->last_update->format('d/m/Y H:i')
+                                        : (string) $shipment->last_update;
+                                } catch (\Throwable $e) {
+                                    $lastUpdateFormatted = (string) $shipment->last_update;
+                                }
+                            @endphp
+                            {{ $lastUpdateFormatted }}
+                        </p>
                     </div>
                 @endif
             </div>
@@ -213,7 +224,14 @@
                                     <p class="text-sm font-medium text-white">{{ $event['status'] ?? 'Actualización' }}</p>
                                     @if (!empty($event['date']))
                                         <p class="shrink-0 text-xs text-gray-500">
-                                            {{ \Illuminate\Support\Carbon::parse($event['date'])->format('d/m/Y H:i') }}
+                                            @php
+                                                try {
+                                                    $formattedDate = \Illuminate\Support\Carbon::parse($event['date'])->format('d/m/Y H:i');
+                                                } catch (\Throwable $e) {
+                                                    $formattedDate = $event['date'];
+                                                }
+                                            @endphp
+                                            {{ $formattedDate }}
                                         </p>
                                     @endif
                                 </div>

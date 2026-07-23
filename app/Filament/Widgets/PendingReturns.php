@@ -229,14 +229,30 @@ class PendingReturns extends Widget
             return false;
         }
 
+        $previousStatus = $shipment->tracking_status;
+
         $shipment->update([
             'tracking_status' => $result['status'],
             'tracking_payload' => [
                 'events' => $result['events'],
                 'status_raw' => $result['status_raw'] ?? null,
+                'carrier' => $result['carrier'] ?? null,
+                'destination' => $result['destination'] ?? null,
+                'estimated_delivery' => $result['estimated_delivery'] ?? null,
             ],
             'last_update' => now(),
         ]);
+
+        // Disparar correo si el estado cambió a "entregado"
+        if ($result['status'] === 'delivered' && $previousStatus !== 'delivered') {
+            $person = $shipment->returnProcess?->person;
+            \App\Services\MailTemplateService::send('shipment_delivered', [
+                'person_name' => $person?->name ?? 'Desconocido',
+                'tracking_number' => $shipment->tracking_number,
+                'carrier' => $result['carrier'] ?? 'EnvíoPack',
+                'date' => now()->format('d/m/Y'),
+            ]);
+        }
 
         return true;
     }
