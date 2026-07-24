@@ -76,7 +76,7 @@ class MailTemplateForm
                         'offboarding_completed' => ['person_name' => 'Nombre', 'asset' => 'Equipo', 'date' => 'Fecha'],
                         default => ['person_name' => 'Nombre', 'asset' => 'Equipo', 'date' => 'Fecha'],
                     })->map(fn ($label, $var) =>
-                        "<button type=\"button\" onclick=\"navigator.clipboard.writeText('{{ {$var} }}'); this.innerText='✓ Copiado'; setTimeout(() => this.innerText='{$label}', 1500)\" class=\"px-2 py-1 rounded bg-gray-700 hover:bg-amber-600 text-xs text-gray-200 transition cursor-pointer\">{$label}</button>"
+                        "<button type=\"button\" onclick=\"var t=document.createElement('textarea');t.value='{{ {$var} }}';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);this.innerText='✓';setTimeout(()=>this.innerText='{$label}',1200)\" class=\"px-2 py-1 rounded bg-gray-700 hover:bg-amber-600 text-xs text-gray-200 transition cursor-pointer\">{$label}</button>"
                     )->implode('')
                     . '</div>'
                 )),
