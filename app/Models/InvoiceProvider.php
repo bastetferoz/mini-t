@@ -11,6 +11,7 @@ class InvoiceProvider extends Model
         'slug',
         'category',
         'default_currency',
+        'company',
         'detection_keywords',
         'custom_prompt',
         'is_active',

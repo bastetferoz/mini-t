@@ -8,8 +8,9 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Actualizar estado de tracking de envíos EnvíoPack cada 30 minutos
-Schedule::job(new \App\Jobs\UpdateTrackingStatus)->everyThirtyMinutes();
+// Actualizar estado de tracking de envíos EnvíoPack a las 9:00 y 19:00
+Schedule::job(new \App\Jobs\UpdateTrackingStatus)->dailyAt('09:00');
+Schedule::job(new \App\Jobs\UpdateTrackingStatus)->dailyAt('19:00');
 
 // Enviar reporte de equipos pendientes (frecuencia configurable desde la plantilla)
 Schedule::command('mail:pending-assets-report')->dailyAt('09:00');

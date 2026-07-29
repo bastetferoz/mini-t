@@ -66,6 +66,18 @@ class InvoiceProviderResource extends Resource
                 ])
                 ->default('USD'),
 
+            Select::make('company')
+                ->label('Gerencia')
+                ->searchable()
+                ->options([
+                    'novatech' => 'Novatech',
+                    'phinxlab' => 'Phinxlab',
+                    'novatech/phinxlab' => 'Novatech/Phinxlab',
+                    'cryptopatagonia' => 'Cryptopatagonia',
+                ])
+                ->nullable()
+                ->helperText('Empresa/gerencia a la que pertenece este proveedor.'),
+
             TagsInput::make('detection_keywords')
                 ->label('Palabras clave de detección')
                 ->placeholder('Agregá palabras clave...')
