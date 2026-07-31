@@ -43,12 +43,7 @@ class InvoiceAnalysis extends Page
 
     public function getAvailableCompanies(): array
     {
-        return Invoice::selectRaw('DISTINCT company')
-            ->whereNotNull('company')
-            ->where('company', '!=', '')
-            ->orderBy('company')
-            ->pluck('company')
-            ->toArray();
+        return ['novatech', 'phinxlab'];
     }
 
     public function getAvailableYears(): array

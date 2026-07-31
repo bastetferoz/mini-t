@@ -30,6 +30,12 @@ class DashboardPanelProvider extends PanelProvider
                 'primary' => Color::Amber,
             ])
             ->viteTheme('resources/css/app.css')
+            ->navigationGroups([
+                \Filament\Navigation\NavigationGroup::make('Facturación')->collapsed(),
+                \Filament\Navigation\NavigationGroup::make('Base de conocimiento')->collapsed(),
+                \Filament\Navigation\NavigationGroup::make('Utilidades')->collapsed(),
+                \Filament\Navigation\NavigationGroup::make('Administración')->collapsed(),
+            ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
