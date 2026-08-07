@@ -89,6 +89,44 @@ class InvoiceBrowser extends Page
     }
 
     /**
+     * Reclasifica las facturas de "otro" usando keywords de proveedores.
+     */
+    public function reclassifyAll(): void
+    {
+        $invoices = Invoice::where('provider', 'otro')
+            ->when($this->selectedYear, fn ($q) => $q->where('year', $this->selectedYear))
+            ->get();
+
+        $providers = \App\Models\InvoiceProvider::where('is_active', true)->get();
+        $reclassified = 0;
+
+        foreach ($invoices as $invoice) {
+            $searchText = strtolower(implode(' ', array_filter([
+                $invoice->service,
+                $invoice->reference,
+                $invoice->notes,
+                $invoice->invoice_number,
+            ])));
+
+            foreach ($providers as $provider) {
+                foreach ($provider->detection_keywords ?? [] as $keyword) {
+                    if (str_contains($searchText, strtolower($keyword))) {
+                        $invoice->update(['provider' => $provider->slug]);
+                        $reclassified++;
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        Notification::make()
+            ->title("{$reclassified} factura(s) reclasificada(s)")
+            ->body($reclassified > 0 ? 'Se movieron a su carpeta correcta.' : 'Ninguna coincidió con las keywords configuradas.')
+            ->color($reclassified > 0 ? 'success' : 'warning')
+            ->send();
+    }
+
+    /**
      * Label amigable del proveedor.
      */
     public function getProviderLabel(string $provider): string

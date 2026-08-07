@@ -206,22 +206,49 @@ class InvoiceAnalysis extends Page
 
     /**
      * Mes a mes por proveedor.
+     * Si viewMode es 'companies' (Convertido a USD), convierte ARS→USD.
+     * Si viewMode es 'providers' (Original), muestra montos tal cual.
      */
     public function getMonthlyByProvider(): array
     {
         $result = [];
+        $convertToUsd = ($this->viewMode === 'companies');
+        $year = (int) $this->selectedYear;
 
         foreach ($this->selectedProviders as $provider) {
-            $data = $this->baseQuery()
-                ->where('provider', $provider)
-                ->selectRaw('month, SUM(COALESCE(amount_usd, amount)) as total')
-                ->groupBy('month')
-                ->pluck('total', 'month')
-                ->toArray();
-
             $months = [];
-            for ($m = 1; $m <= 12; $m++) {
-                $months[$m] = round((float) ($data[$m] ?? 0), 2);
+
+            if ($convertToUsd) {
+                for ($m = 1; $m <= 12; $m++) {
+                    $baseQ = Invoice::where('year', $year)
+                        ->where('provider', $provider)
+                        ->where('month', $m)
+                        ->when(! empty($this->selectedCompanies), fn ($q) => $q->whereIn('company', $this->selectedCompanies));
+
+                    // USD queda igual
+                    $usdAmount = (float) (clone $baseQ)->where('currency', 'USD')->sum('amount');
+
+                    // ARS se convierte con cotización BNA del mes
+                    $arsAmount = (float) (clone $baseQ)->where('currency', 'ARS')->sum('amount');
+                    $arsInUsd = 0;
+                    if ($arsAmount > 0) {
+                        $arsInUsd = \App\Services\ExchangeRateService::convertToUsd($arsAmount, $year, $m) ?? 0;
+                    }
+
+                    $months[$m] = round($usdAmount + $arsInUsd, 2);
+                }
+            } else {
+                // Original: sumar todo sin convertir
+                $data = $this->baseQuery()
+                    ->where('provider', $provider)
+                    ->selectRaw('month, SUM(amount) as total')
+                    ->groupBy('month')
+                    ->pluck('total', 'month')
+                    ->toArray();
+
+                for ($m = 1; $m <= 12; $m++) {
+                    $months[$m] = round((float) ($data[$m] ?? 0), 2);
+                }
             }
 
             $result[$provider] = $months;

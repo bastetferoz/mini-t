@@ -165,6 +165,78 @@ class ImportAssignments extends Page implements HasForms
             ->send();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Exportar Proveedores (JSON)
+    |--------------------------------------------------------------------------
+    */
+
+    public function exportProviders(): StreamedResponse
+    {
+        $providers = \App\Models\InvoiceProvider::all()->toArray();
+
+        $filename = 'providers_' . now()->format('Y-m-d_His') . '.json';
+
+        return response()->streamDownload(function () use ($providers) {
+            echo json_encode($providers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        }, $filename, [
+            'Content-Type' => 'application/json',
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Importar Proveedores (JSON)
+    |--------------------------------------------------------------------------
+    */
+
+    public function importProviders(): void
+    {
+        $file = collect($this->backupData['backup_file'] ?? [])->first();
+
+        if (! $file) {
+            Notification::make()
+                ->title('Archivo inválido')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $content = file_get_contents($file->getRealPath());
+        $data = json_decode($content, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || ! is_array($data)) {
+            Notification::make()
+                ->title('Archivo JSON inválido')
+                ->body(json_last_error_msg())
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $imported = 0;
+
+        foreach ($data as $item) {
+            unset($item['id'], $item['created_at'], $item['updated_at']);
+
+            if (empty($item['slug'])) {
+                continue;
+            }
+
+            \App\Models\InvoiceProvider::updateOrCreate(
+                ['slug' => $item['slug']],
+                $item
+            );
+            $imported++;
+        }
+
+        Notification::make()
+            ->title('Proveedores importados')
+            ->body("{$imported} proveedores procesados.")
+            ->success()
+            ->send();
+    }
+
     protected function getForms(): array
     {
         return [

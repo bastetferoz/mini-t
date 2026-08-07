@@ -236,6 +236,46 @@ class InvoiceResource extends Resource
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    \Filament\Actions\BulkAction::make('reclasificar')
+                        ->label('Reclasificar proveedor')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('info')
+                        ->requiresConfirmation()
+                        ->modalHeading('Reclasificar facturas')
+                        ->modalDescription('Se re-evaluará el proveedor de las facturas seleccionadas usando las keywords configuradas.')
+                        ->action(function ($records) {
+                            $providers = \App\Models\InvoiceProvider::where('is_active', true)->get();
+                            $reclassified = 0;
+
+                            foreach ($records as $record) {
+                                $searchText = strtolower(implode(' ', array_filter([
+                                    $record->service,
+                                    $record->reference,
+                                    $record->notes,
+                                    $record->invoice_number,
+                                ])));
+
+                                $matched = null;
+                                foreach ($providers as $provider) {
+                                    foreach ($provider->detection_keywords ?? [] as $keyword) {
+                                        if (str_contains($searchText, strtolower($keyword))) {
+                                            $matched = $provider->slug;
+                                            break 2;
+                                        }
+                                    }
+                                }
+
+                                if ($matched && $matched !== $record->provider) {
+                                    $record->update(['provider' => $matched]);
+                                    $reclassified++;
+                                }
+                            }
+
+                            \Filament\Notifications\Notification::make()
+                                ->title("{$reclassified} factura(s) reclasificada(s)")
+                                ->success()
+                                ->send();
+                        }),
                     \Filament\Actions\BulkAction::make('asignar_empresa_masivo')
                         ->label('Asignar empresa')
                         ->icon('heroicon-o-building-office')

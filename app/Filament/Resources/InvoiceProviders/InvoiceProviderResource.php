@@ -51,6 +51,7 @@ class InvoiceProviderResource extends Resource
                     'internet' => 'Internet',
                     'telefonia' => 'Telefonía',
                     'licencias' => 'Licencias / Software',
+                    'devtool' => 'DevTool',
                     'dominios' => 'Dominios',
                     'ia' => 'Inteligencia Artificial',
                     'seguridad' => 'Seguridad',

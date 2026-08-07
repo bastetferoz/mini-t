@@ -33,12 +33,27 @@
 
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             @forelse($this->getProviders() as $provider)
-                <button wire:click="goToProvider('{{ $provider->provider }}')" class="group flex flex-col items-center gap-3 p-6 rounded-xl border border-gray-700 bg-gray-800/50 hover:bg-gray-700/70 hover:border-amber-500/50 transition-all">
-                    <div class="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition">
-                        <x-heroicon-o-folder class="w-8 h-8 text-amber-400" />
+                @php
+                    $isOtro = $provider->provider === 'otro';
+                    $categoryIcon = match(\App\Models\InvoiceProvider::where('slug', $provider->provider)->value('category')) {
+                        'cloud' => 'heroicon-o-cloud',
+                        'internet' => 'heroicon-o-globe-alt',
+                        'telefonia' => 'heroicon-o-phone',
+                        'licencias' => 'heroicon-o-key',
+                        'devtool' => 'heroicon-o-code-bracket',
+                        'dominios' => 'heroicon-o-globe-americas',
+                        'ia' => 'heroicon-o-cpu-chip',
+                        'seguridad' => 'heroicon-o-shield-check',
+                        'comunicaciones' => 'heroicon-o-chat-bubble-left-right',
+                        default => 'heroicon-o-folder',
+                    };
+                @endphp
+                <button wire:click="goToProvider('{{ $provider->provider }}')" class="group flex flex-col items-center gap-3 p-6 rounded-xl border {{ $isOtro ? 'border-red-700/50 bg-red-900/20 hover:bg-red-800/30 hover:border-red-500/50' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-700/70 hover:border-amber-500/50' }} transition-all">
+                    <div class="w-14 h-14 rounded-full {{ $isOtro ? 'bg-red-500/10 group-hover:bg-red-500/20' : 'bg-amber-500/10 group-hover:bg-amber-500/20' }} flex items-center justify-center transition">
+                        <x-dynamic-component :component="$categoryIcon" class="w-8 h-8 {{ $isOtro ? 'text-red-400' : 'text-amber-400' }}" />
                     </div>
                     <span class="text-sm font-medium text-white text-center">{{ $this->getProviderLabel($provider->provider) }}</span>
-                    <span class="text-xs text-gray-500">{{ $provider->total }} {{ $provider->total === 1 ? 'factura' : 'facturas' }}</span>
+                    <span class="text-xs {{ $isOtro ? 'text-red-400' : 'text-gray-500' }}">{{ $provider->total }} {{ $provider->total === 1 ? 'factura' : 'facturas' }}</span>
                 </button>
             @empty
                 <div class="col-span-full text-center py-16 text-gray-500">
@@ -72,6 +87,15 @@
             $invoices = $this->getInvoices();
             $monthNames = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
         @endphp
+
+        {{-- Botón reclasificar si estamos en "otro" --}}
+        @if($selectedProvider === 'otro' && $invoices->count() > 0)
+            <div class="mb-4">
+                <x-filament::button wire:click="reclassifyAll" color="info" icon="heroicon-o-arrow-path" size="sm">
+                    Reclasificar todas ({{ $invoices->count() }})
+                </x-filament::button>
+            </div>
+        @endif
 
         <div class="overflow-x-auto rounded-xl border border-gray-700">
             <table class="w-full text-sm">

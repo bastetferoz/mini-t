@@ -14,6 +14,8 @@ class Invoice extends Model
         'reference',
         'amount',
         'currency',
+        'exchange_rate',
+        'amount_usd',
         'invoice_date',
         'period',
         'month',

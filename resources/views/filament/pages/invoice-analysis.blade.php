@@ -11,10 +11,10 @@
             </select>
         </div>
         <div>
-            <label class="text-xs text-gray-500 uppercase tracking-wide block mb-1">Vista</label>
+            <label class="text-xs text-gray-500 uppercase tracking-wide block mb-1">Moneda</label>
             <select wire:model.live="viewMode" class="rounded-lg border-gray-600 bg-gray-800 text-white text-sm px-3 py-2">
-                <option value="providers">Por proveedor</option>
-                <option value="companies">Por empresa</option>
+                <option value="providers">Original</option>
+                <option value="companies">Convertido a USD</option>
             </select>
         </div>
     </div>
@@ -93,13 +93,13 @@
     {{-- TABLA MES A MES --}}
     <x-filament::card class="mb-6">
         <h3 class="text-sm font-semibold text-white mb-4">
-            {{ $viewMode === 'companies' ? 'Por empresa' : 'Por proveedor' }} — mes a mes (USD)
+            Por proveedor — mes a mes ({{ $viewMode === 'companies' ? 'USD convertido' : 'moneda original' }})
         </h3>
         <div class="overflow-x-auto">
             <table class="w-full text-xs">
                 <thead>
                     <tr class="border-b border-gray-700">
-                        <th class="text-left py-2 px-2 text-gray-400 sticky left-0 bg-gray-900">{{ $viewMode === 'companies' ? 'Empresa' : 'Proveedor' }}</th>
+                        <th class="text-left py-2 px-2 text-gray-400 sticky left-0 bg-gray-900">Proveedor</th>
                         @for($m = 1; $m <= 12; $m++)
                             <th class="text-right py-2 px-2 text-gray-400">{{ $monthNames[$m] }}</th>
                         @endfor
@@ -108,7 +108,7 @@
                 </thead>
                 <tbody>
                     @php
-                        $tableData = $viewMode === 'companies' ? $this->getMonthlyByCompany() : $this->getMonthlyByProvider();
+                        $tableData = $this->getMonthlyByProvider();
                         $monthTotals = array_fill(1, 12, 0);
                         $grandTotal = 0;
                     @endphp
@@ -117,17 +117,23 @@
                             $rowTotal = array_sum($months);
                             $grandTotal += $rowTotal;
                             foreach ($months as $m => $val) { $monthTotals[$m] += $val; }
+                            if ($viewMode === 'providers') {
+                                $providerCurrency = \App\Models\InvoiceProvider::where('slug', $label)->value('default_currency') ?? 'USD';
+                                $cellColor = $providerCurrency === 'ARS' ? 'text-blue-400' : 'text-green-400';
+                            } else {
+                                $cellColor = 'text-green-400'; // todo en USD
+                            }
                         @endphp
                         <tr class="border-b border-gray-800 hover:bg-gray-800/50">
                             <td class="py-2 px-2 text-white font-medium sticky left-0 bg-gray-900">
-                                {{ $viewMode === 'companies' ? ucfirst($label) : $this->getProviderLabel($label) }}
+                                {{ $this->getProviderLabel($label) }}
                             </td>
                             @for($m = 1; $m <= 12; $m++)
-                                <td class="py-2 px-2 text-right {{ $months[$m] > 0 ? 'text-gray-300' : 'text-gray-700' }}">
+                                <td class="py-2 px-2 text-right {{ $months[$m] > 0 ? $cellColor : 'text-gray-700' }}">
                                     {{ $months[$m] > 0 ? number_format($months[$m], 0, ',', '.') : '—' }}
                                 </td>
                             @endfor
-                            <td class="py-2 px-2 text-right text-white font-semibold">
+                            <td class="py-2 px-2 text-right font-semibold {{ $cellColor }}">
                                 {{ number_format($rowTotal, 0, ',', '.') }}
                             </td>
                         </tr>
@@ -148,6 +154,29 @@
                 </tfoot>
             </table>
         </div>
+
+        {{-- Cotizaciones usadas (solo en modo convertido) --}}
+        @if($viewMode === 'companies')
+            <div class="mt-3 pt-3 border-t border-gray-800">
+                <p class="text-xs text-gray-500 mb-2">Cotización BNA (venta) usada por mes:</p>
+                <div class="flex flex-wrap gap-2">
+                    @for($m = 1; $m <= 12; $m++)
+                        @php
+                            $rate = \App\Models\Invoice::where('year', $selectedYear)
+                                ->where('month', $m)
+                                ->where('currency', 'ARS')
+                                ->whereNotNull('exchange_rate')
+                                ->value('exchange_rate');
+                        @endphp
+                        @if($rate)
+                            <span class="text-xs px-2 py-1 rounded bg-gray-800 text-gray-400">
+                                {{ $monthNames[$m] }}: <span class="text-white">${{ number_format($rate, 2, ',', '.') }}</span>
+                            </span>
+                        @endif
+                    @endfor
+                </div>
+            </div>
+        @endif
     </x-filament::card>
 
     {{-- DESGLOSE --}}
