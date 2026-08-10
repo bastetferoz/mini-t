@@ -105,6 +105,8 @@ class ViewPerson extends ViewRecord
                         ->body('Configurá la modalidad de recuperación desde el dashboard.')
                         ->success()
                         ->send();
+
+                    \App\Services\ActivityLogger::offboarding("Baja iniciada para {$record->name}", $record);
                 }),
 
             // ⏪ REVERTIR BAJA (solo admin)
@@ -147,6 +149,8 @@ class ViewPerson extends ViewRecord
                         ->body("Se restauraron {$trashedAssignments->count()} asignaciones.")
                         ->success()
                         ->send();
+
+                    \App\Services\ActivityLogger::offboarding("Baja REVERTIDA para {$record->name} ({$trashedAssignments->count()} asignaciones restauradas)", $record);
                 }),
 
             // 🟢 REGISTRAR RECEPCIÓN
@@ -239,6 +243,8 @@ class ViewPerson extends ViewRecord
     'status' => 'inactive',
     'offboarding_completed_at' => now(),
 ]);
+
+                    \App\Services\ActivityLogger::offboarding("Baja completada para {$record->name}", $record);
 
                     // 📧 ENVIAR CORREO CON RESUMEN
                     $resumen = collect($assets)->map(function ($item) {

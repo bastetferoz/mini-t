@@ -205,11 +205,18 @@ class InvoiceBrowser extends Page
                 $success = 0;
                 $errors = [];
 
-                foreach ($files as $filePath) {
+                foreach ($files as $index => $filePath) {
+                    // Delay entre facturas para evitar rate limit de la IA
+                    if ($index > 0) {
+                        sleep(3);
+                    }
+
                     $parsed = InvoiceParserService::parse($filePath);
 
                     if (! $parsed) {
-                        $errors[] = basename($filePath) . ': ' . (InvoiceParserService::$lastError ?? 'Error desconocido');
+                        $errorMsg = basename($filePath) . ': ' . (InvoiceParserService::$lastError ?? 'Error desconocido');
+                        $errors[] = $errorMsg;
+                        \App\Services\ActivityLogger::facturacion("❌ Error al cargar factura: {$errorMsg}");
                         continue;
                     }
 
@@ -253,6 +260,7 @@ class InvoiceBrowser extends Page
                     }
 
                     $success++;
+                    \App\Services\ActivityLogger::facturacion("✓ Factura cargada: {$provider} | \${$parsed['amount']} | {$period}", $invoice);
                 }
 
                 // Notificaciones

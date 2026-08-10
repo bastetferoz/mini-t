@@ -106,6 +106,8 @@ class AssignmentsRelationManager extends RelationManager
 
             \App\Models\Asset::where('id', $record->asset_id)
                 ->update(['status' => 'assigned']);
+
+            \App\Services\ActivityLogger::activos("Equipo asignado a {$this->getOwnerRecord()->name}", $record);
         }),
 ])
 
@@ -158,6 +160,8 @@ class AssignmentsRelationManager extends RelationManager
         }
 
         $record->delete();
+
+        \App\Services\ActivityLogger::activos("Equipo desasignado de {$person->name}: {$asset->full_description} (motivo: {$data['reason']})", $asset);
 
         // 📧 Enviar correo usando la plantilla asset_return
         if (!empty($data['send_email'])) {
@@ -285,6 +289,8 @@ if ($data['reason'] === 'failure' || $data['reason'] === 'lost') {
         // 🔒 Nuevo en uso
         Asset::where('id', $data['new_asset_id'])
             ->update(['status' => 'assigned']);
+
+        \App\Services\ActivityLogger::activos("Reemplazo para {$person->name}: {$oldAsset->full_description} → {$newAsset->full_description} (motivo: {$data['reason']})", $newAsset);
 
         // 📧 Correo
         if (! empty($data['send_email'])) {

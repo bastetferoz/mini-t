@@ -96,6 +96,11 @@ class InvoiceProviderResource extends Resource
             Toggle::make('is_active')
                 ->label('Activo')
                 ->default(true),
+
+            Toggle::make('is_multi')
+                ->label('Multi-factura')
+                ->default(false)
+                ->helperText('Activar si este proveedor puede tener varias facturas en el mismo mes (ej: Google con múltiples dominios, Microsoft con distintos planes).'),
         ]);
     }
 

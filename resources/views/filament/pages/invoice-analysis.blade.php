@@ -96,14 +96,16 @@
             Por proveedor — mes a mes ({{ $viewMode === 'companies' ? 'USD convertido' : 'moneda original' }})
         </h3>
         <div class="overflow-x-auto">
+            @php
+                $maxMonth = (int) $selectedYear == now()->year ? now()->month : 12;
+            @endphp
             <table class="w-full text-xs">
                 <thead>
                     <tr class="border-b border-gray-700">
                         <th class="text-left py-2 px-2 text-gray-400 sticky left-0 bg-gray-900">Proveedor</th>
-                        @for($m = 1; $m <= 12; $m++)
+                        @for($m = 1; $m <= $maxMonth; $m++)
                             <th class="text-right py-2 px-2 text-gray-400">{{ $monthNames[$m] }}</th>
                         @endfor
-                        <th class="text-right py-2 px-2 text-gray-400 font-bold">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -121,35 +123,55 @@
                                 $providerCurrency = \App\Models\InvoiceProvider::where('slug', $label)->value('default_currency') ?? 'USD';
                                 $cellColor = $providerCurrency === 'ARS' ? 'text-blue-400' : 'text-green-400';
                             } else {
-                                $cellColor = 'text-green-400'; // todo en USD
+                                $cellColor = 'text-green-400';
                             }
+                            $isMulti = \App\Models\InvoiceProvider::where('slug', $label)->value('is_multi') ?? false;
                         @endphp
-                        <tr class="border-b border-gray-800 hover:bg-gray-800/50">
+                        <tbody @if($isMulti) x-data="{ open: false }" @endif>
+                        {{-- Fila principal del proveedor --}}
+                        <tr class="border-b border-gray-800 hover:bg-gray-800/50 {{ $isMulti ? 'cursor-pointer' : '' }}" @if($isMulti) x-on:click="open = !open" @endif>
                             <td class="py-2 px-2 text-white font-medium sticky left-0 bg-gray-900">
                                 {{ $this->getProviderLabel($label) }}
+                                @if($isMulti)
+                                    <span class="text-[10px] text-gray-500 ml-1" x-text="open ? '▲' : '▼'">▼</span>
+                                @endif
                             </td>
-                            @for($m = 1; $m <= 12; $m++)
+                            @for($m = 1; $m <= $maxMonth; $m++)
                                 <td class="py-2 px-2 text-right {{ $months[$m] > 0 ? $cellColor : 'text-gray-700' }}">
                                     {{ $months[$m] > 0 ? number_format($months[$m], 0, ',', '.') : '—' }}
                                 </td>
                             @endfor
-                            <td class="py-2 px-2 text-right font-semibold {{ $cellColor }}">
-                                {{ number_format($rowTotal, 0, ',', '.') }}
-                            </td>
                         </tr>
+                        {{-- Sub-filas por referencia si es multi --}}
+                        @if($isMulti)
+                            @php
+                                $subData = $this->getMonthlyByReference($label);
+                            @endphp
+                            @foreach($subData as $ref => $refMonths)
+                                @php $refTotal = array_sum($refMonths); @endphp
+                                <tr class="border-b border-gray-900/50" x-show="open" x-cloak>
+                                    <td class="py-1 px-2 pl-6 text-gray-400 text-xs sticky left-0 bg-gray-900">
+                                        ↳ {{ $ref ?: '(sin referencia)' }}
+                                    </td>
+                                    @for($m = 1; $m <= $maxMonth; $m++)
+                                        <td class="py-1 px-2 text-right text-xs {{ $refMonths[$m] > 0 ? 'text-gray-500' : 'text-gray-800' }}">
+                                            {{ $refMonths[$m] > 0 ? number_format($refMonths[$m], 0, ',', '.') : '' }}
+                                        </td>
+                                    @endfor
+                                </tr>
+                            @endforeach
+                        @endif
+                        </tbody>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr class="border-t-2 border-gray-600">
                         <td class="py-2 px-2 font-bold text-white sticky left-0 bg-gray-900">Total</td>
-                        @for($m = 1; $m <= 12; $m++)
+                        @for($m = 1; $m <= $maxMonth; $m++)
                             <td class="py-2 px-2 text-right font-bold text-white">
                                 {{ $monthTotals[$m] > 0 ? number_format($monthTotals[$m], 0, ',', '.') : '—' }}
                             </td>
                         @endfor
-                        <td class="py-2 px-2 text-right font-bold text-amber-400">
-                            {{ number_format($grandTotal, 0, ',', '.') }}
-                        </td>
                     </tr>
                 </tfoot>
             </table>

@@ -108,7 +108,11 @@ class InvoiceAnalysis extends Page
         }
 
         if (! empty($this->selectedCompanies)) {
-            $query->whereIn('company', $this->selectedCompanies);
+            $query->where(function ($q) {
+                $q->whereIn('company', $this->selectedCompanies)
+                  ->orWhereNull('company')
+                  ->orWhere('company', '');
+            });
         }
 
         return $query;
@@ -223,7 +227,11 @@ class InvoiceAnalysis extends Page
                     $baseQ = Invoice::where('year', $year)
                         ->where('provider', $provider)
                         ->where('month', $m)
-                        ->when(! empty($this->selectedCompanies), fn ($q) => $q->whereIn('company', $this->selectedCompanies));
+                        ->when(! empty($this->selectedCompanies), fn ($q) => $q->where(function ($sq) {
+                            $sq->whereIn('company', $this->selectedCompanies)
+                               ->orWhereNull('company')
+                               ->orWhere('company', '');
+                        }));
 
                     // USD queda igual
                     $usdAmount = (float) (clone $baseQ)->where('currency', 'USD')->sum('amount');
@@ -252,6 +260,59 @@ class InvoiceAnalysis extends Page
             }
 
             $result[$provider] = $months;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Sub-desglose por referencia para proveedores multi.
+     */
+    public function getMonthlyByReference(string $provider): array
+    {
+        $year = (int) $this->selectedYear;
+        $convertToUsd = ($this->viewMode === 'companies');
+
+        $references = Invoice::where('year', $year)
+            ->where('provider', $provider)
+            ->when(! empty($this->selectedCompanies), fn ($q) => $q->where(function ($sq) {
+                $sq->whereIn('company', $this->selectedCompanies)
+                   ->orWhereNull('company')
+                   ->orWhere('company', '');
+            }))
+            ->selectRaw('DISTINCT COALESCE(reference, service) as ref')
+            ->pluck('ref')
+            ->filter()
+            ->toArray();
+
+        $result = [];
+
+        foreach ($references as $ref) {
+            $months = [];
+            for ($m = 1; $m <= 12; $m++) {
+                $query = Invoice::where('year', $year)
+                    ->where('provider', $provider)
+                    ->where('month', $m)
+                    ->where(function ($q) use ($ref) {
+                        $q->where('reference', $ref)->orWhere('service', $ref);
+                    })
+                    ->when(! empty($this->selectedCompanies), fn ($q) => $q->where(function ($sq) {
+                        $sq->whereIn('company', $this->selectedCompanies)
+                           ->orWhereNull('company')
+                           ->orWhere('company', '');
+                    }));
+
+                if ($convertToUsd) {
+                    $usd = (float) (clone $query)->where('currency', 'USD')->sum('amount');
+                    $ars = (float) (clone $query)->where('currency', 'ARS')->sum('amount');
+                    $arsInUsd = $ars > 0 ? (\App\Services\ExchangeRateService::convertToUsd($ars, $year, $m) ?? 0) : 0;
+                    $months[$m] = round($usd + $arsInUsd, 2);
+                } else {
+                    $months[$m] = round((float) $query->sum('amount'), 2);
+                }
+            }
+
+            $result[$ref] = $months;
         }
 
         return $result;
