@@ -1,9 +1,8 @@
 #!/bin/bash
 echo "🔄 Actualizando proyecto..."
 
-# Detectar usuario del webserver
-WEB_USER=$(ps aux | grep -E "nginx|apache|php-fpm" | grep -v grep | head -1 | awk '{print $1}')
-WEB_USER=${WEB_USER:-www-data}
+# Usuario del webserver (forzar www-data para evitar detección fallida)
+WEB_USER="www-data"
 CURRENT_USER=$(whoami)
 
 echo "  → Usuario web: $WEB_USER"
@@ -50,7 +49,11 @@ sudo chmod -R 775 storage/app/public/invoices
 # Cache (limpiar en vez de compilar — previene error tempnam)
 php artisan optimize:clear
 
-# Reiniciar PHP-FPM si existe
-sudo systemctl restart php*-fpm 2>/dev/null
+# Fix final de permisos (después de optimize:clear que puede crear archivos de cache)
+sudo chown -R $CURRENT_USER:$WEB_USER storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache
+
+# Reiniciar PHP-FPM
+sudo systemctl restart php8.5-fpm
 
 echo "✅ Actualización completada."
