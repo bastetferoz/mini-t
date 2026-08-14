@@ -17,3 +17,6 @@ Schedule::command('mail:pending-assets-report')->dailyAt('09:00');
 
 // Procesar facturas desde buzón de correo (cada 15 min, el servicio verifica el intervalo configurado)
 Schedule::command('invoices:process-mail')->everyFifteenMinutes();
+
+// Eliminar facturas duplicadas (después de cada ingesta)
+Schedule::command('invoices:remove-duplicates')->everyThirtyMinutes();
