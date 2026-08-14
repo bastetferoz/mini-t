@@ -307,6 +307,71 @@ class InvoiceBrowser extends Page
             ->url(\App\Filament\Resources\Invoices\InvoiceResource::getUrl('create'));
     }
 
+    /**
+     * Elimina una factura individual.
+     */
+    public function deleteInvoice(int $invoiceId): void
+    {
+        $invoice = Invoice::find($invoiceId);
+
+        if (! $invoice) {
+            return;
+        }
+
+        // Borrar archivo si existe
+        if ($invoice->file_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($invoice->file_path);
+        }
+
+        $provider = $invoice->provider;
+        $number = $invoice->invoice_number ?? 'sin número';
+        $invoice->delete();
+
+        \App\Services\ActivityLogger::facturacion("🗑️ Factura eliminada: {$provider} Nº {$number}");
+
+        Notification::make()
+            ->title('Factura eliminada')
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Elimina duplicados (misma invoice_number + provider, queda la primera).
+     */
+    public function removeDuplicates(): void
+    {
+        $duplicates = Invoice::selectRaw('invoice_number, provider, COUNT(*) as total, MIN(id) as keep_id')
+            ->whereNotNull('invoice_number')
+            ->where('invoice_number', '!=', '')
+            ->groupBy('invoice_number', 'provider')
+            ->having('total', '>', 1)
+            ->get();
+
+        $removed = 0;
+
+        foreach ($duplicates as $dup) {
+            $toDelete = Invoice::where('invoice_number', $dup->invoice_number)
+                ->where('provider', $dup->provider)
+                ->where('id', '!=', $dup->keep_id)
+                ->get();
+
+            foreach ($toDelete as $invoice) {
+                if ($invoice->file_path) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($invoice->file_path);
+                }
+                $invoice->delete();
+                $removed++;
+            }
+        }
+
+        \App\Services\ActivityLogger::facturacion("🧹 Eliminados {$removed} duplicados");
+
+        Notification::make()
+            ->title($removed > 0 ? "{$removed} duplicado(s) eliminado(s)" : 'Sin duplicados')
+            ->color($removed > 0 ? 'success' : 'info')
+            ->send();
+    }
+
     public static function canAccess(): bool
     {
         return auth()->user()->hasRole('admin') ||

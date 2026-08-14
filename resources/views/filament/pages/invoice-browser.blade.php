@@ -2,6 +2,9 @@
 
     {{-- Botones de carga --}}
     <div class="flex justify-end gap-3 mb-6">
+        <x-filament::button wire:click="removeDuplicates" color="warning" icon="heroicon-o-trash" size="sm" wire:confirm="¿Eliminar todas las facturas duplicadas? Se conserva la primera de cada grupo.">
+            Eliminar duplicados
+        </x-filament::button>
         {{ $this->uploadAiAction }}
         {{ $this->manualCreateAction }}
     </div>
@@ -110,6 +113,7 @@
                         <th class="text-left py-3 px-4 text-gray-400 font-medium">Fecha</th>
                         <th class="text-left py-3 px-4 text-gray-400 font-medium">Empresa</th>
                         <th class="text-center py-3 px-4 text-gray-400 font-medium">Archivo</th>
+                        <th class="text-center py-3 px-4 text-gray-400 font-medium w-10"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -134,9 +138,14 @@
                                     —
                                 @endif
                             </td>
+                            <td class="py-3 px-4 text-center">
+                                <button wire:click="deleteInvoice({{ $invoice->id }})" wire:confirm="¿Eliminar esta factura?" class="text-red-400/60 hover:text-red-400 transition" title="Eliminar">
+                                    <x-heroicon-o-trash class="w-4 h-4" />
+                                </button>
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="py-8 text-center text-gray-500">Sin facturas en este período.</td></tr>
+                        <tr><td colspan="10" class="py-8 text-center text-gray-500">Sin facturas en este período.</td></tr>
                     @endforelse
                 </tbody>
                 @if($invoices->count() > 0)
@@ -144,7 +153,7 @@
                     <tr class="border-t border-gray-600">
                         <td class="py-3 px-4 font-semibold text-white" colspan="3">Total</td>
                         <td class="py-3 px-4 text-right font-bold text-amber-400">${{ number_format($invoices->sum('amount'), 2, ',', '.') }}</td>
-                        <td colspan="5"></td>
+                        <td colspan="6"></td>
                     </tr>
                 </tfoot>
                 @endif
