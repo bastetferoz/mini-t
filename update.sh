@@ -47,8 +47,8 @@ mkdir -p storage/app/public/invoices
 sudo chown -R $CURRENT_USER:$WEB_USER storage/app/public/invoices
 sudo chmod -R 775 storage/app/public/invoices
 
-# Cache (después de arreglar permisos)
-php artisan optimize
+# Cache (limpiar en vez de compilar — previene error tempnam)
+php artisan optimize:clear
 
 # Reiniciar PHP-FPM si existe
 sudo systemctl restart php*-fpm 2>/dev/null
