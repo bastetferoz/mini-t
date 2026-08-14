@@ -66,10 +66,11 @@ class ImportAssignments extends Page implements HasForms
             ->components([
 
                 FileUpload::make('backup_file')
-                    ->label('Archivo SQL de backup')
+                    ->label('Archivo')
                     ->required()
                     ->acceptedFileTypes([
                         'application/sql',
+                        'application/json',
                         'text/plain',
                         'application/octet-stream',
                     ]),
