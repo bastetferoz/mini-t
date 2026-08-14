@@ -32,7 +32,7 @@ class DashboardPanelProvider extends PanelProvider
             ->viteTheme('resources/css/app.css')
             ->navigationGroups([
                 \Filament\Navigation\NavigationGroup::make('Facturación')->collapsed(),
-                \Filament\Navigation\NavigationGroup::make('Base de conocimiento')->collapsed(),
+                \Filament\Navigation\NavigationGroup::make('Procesos')->collapsed(),
                 \Filament\Navigation\NavigationGroup::make('Utilidades')->collapsed(),
                 \Filament\Navigation\NavigationGroup::make('Administración')->collapsed(),
             ])

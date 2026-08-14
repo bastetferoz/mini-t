@@ -17,6 +17,12 @@
                 <option value="companies">Convertido a USD</option>
             </select>
         </div>
+        <div class="ml-auto">
+            <button onclick="window.print()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition print:hidden">
+                <x-heroicon-o-arrow-down-tray class="w-4 h-4" />
+                Exportar PDF
+            </button>
+        </div>
     </div>
 
     {{-- Checklist: Proveedores --}}
@@ -91,7 +97,7 @@
     </div>
 
     {{-- TABLA MES A MES --}}
-    <x-filament::card class="mb-6">
+    <x-filament::card class="mb-6" id="tabla-analisis">
         <h3 class="text-sm font-semibold text-white mb-4">
             Por proveedor — mes a mes ({{ $viewMode === 'companies' ? 'USD convertido' : 'moneda original' }})
         </h3>
@@ -138,7 +144,7 @@
                             </td>
                             @for($m = 1; $m <= $maxMonth; $m++)
                                 <td class="py-2 px-2 text-right {{ $months[$m] > 0 ? $cellColor : 'text-gray-700' }}">
-                                    {{ $months[$m] > 0 ? number_format($months[$m], 0, ',', '.') : '—' }}
+                                    {{ $months[$m] > 0 ? number_format($months[$m], 2, ',', '.') : '—' }}
                                 </td>
                             @endfor
                         </tr>
@@ -155,7 +161,7 @@
                                     </td>
                                     @for($m = 1; $m <= $maxMonth; $m++)
                                         <td class="py-1 px-2 text-right text-xs {{ $refMonths[$m] > 0 ? 'text-gray-500' : 'text-gray-800' }}">
-                                            {{ $refMonths[$m] > 0 ? number_format($refMonths[$m], 0, ',', '.') : '' }}
+                                            {{ $refMonths[$m] > 0 ? number_format($refMonths[$m], 2, ',', '.') : '' }}
                                         </td>
                                     @endfor
                                 </tr>
@@ -169,7 +175,7 @@
                         <td class="py-2 px-2 font-bold text-white sticky left-0 bg-gray-900">Total</td>
                         @for($m = 1; $m <= $maxMonth; $m++)
                             <td class="py-2 px-2 text-right font-bold text-white">
-                                {{ $monthTotals[$m] > 0 ? number_format($monthTotals[$m], 0, ',', '.') : '—' }}
+                                {{ $monthTotals[$m] > 0 ? number_format($monthTotals[$m], 2, ',', '.') : '—' }}
                             </td>
                         @endfor
                     </tr>
@@ -247,5 +253,21 @@
             </div>
         </x-filament::card>
     </div>
+
+    {{-- Estilos de impresión --}}
+    <style>
+        @media print {
+            /* Ocultar TODO excepto la tabla mes a mes */
+            body * { visibility: hidden; }
+            #tabla-analisis, #tabla-analisis * { visibility: visible; }
+            #tabla-analisis { position: absolute; top: 0; left: 0; width: 100%; }
+
+            /* Mantener colores */
+            body, html { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+            /* Horizontal */
+            @page { size: landscape; margin: 1cm; }
+        }
+    </style>
 
 </x-filament-panels::page>

@@ -26,7 +26,7 @@ class ArticleResource extends Resource
 {
     protected static ?string $model = Article::class;
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Base de conocimiento';
+    protected static string | \UnitEnum | null $navigationGroup = 'Procesos';
     protected static ?string $navigationLabel = 'Artículos';
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-book-open';
     protected static ?int $navigationSort = 1;

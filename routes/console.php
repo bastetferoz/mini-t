@@ -14,3 +14,6 @@ Schedule::job(new \App\Jobs\UpdateTrackingStatus)->dailyAt('19:00');
 
 // Enviar reporte de equipos pendientes (frecuencia configurable desde la plantilla)
 Schedule::command('mail:pending-assets-report')->dailyAt('09:00');
+
+// Procesar facturas desde buzón de correo (cada 15 min, el servicio verifica el intervalo configurado)
+Schedule::command('invoices:process-mail')->everyFifteenMinutes();

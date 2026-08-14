@@ -225,6 +225,20 @@ class InvoiceBrowser extends Page
                     $period = $parsed['period'] ?? now()->format('Y-m');
                     $parts = explode('-', $period);
 
+                    // Verificar duplicado por número de factura
+                    $invoiceNumber = $parsed['invoice_number'] ?? null;
+                    if ($invoiceNumber) {
+                        $duplicate = Invoice::where('invoice_number', $invoiceNumber)
+                            ->where('provider', $provider)
+                            ->exists();
+
+                        if ($duplicate) {
+                            $errors[] = basename($filePath) . ': Duplicada (Nº ' . $invoiceNumber . ')';
+                            \App\Services\ActivityLogger::facturacion("⚠️ Factura duplicada omitida: {$provider} Nº {$invoiceNumber}");
+                            continue;
+                        }
+                    }
+
                     $invoice = Invoice::create([
                         'provider' => $provider,
                         'company' => $parsed['company'] ?? null,

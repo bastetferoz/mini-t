@@ -51,6 +51,14 @@ class InvoiceParserService
 
         $result = self::callAi($profile, $base64, $mimeType, $prompt);
 
+        // Si falla (posible 429), reintentar una vez después de esperar
+        if (! $result && self::$lastError && str_contains(self::$lastError, '429')) {
+            \Log::info("InvoiceParser: Rate limit en Etapa 2, reintentando en 10 segundos...");
+            sleep(10);
+            self::$lastError = null;
+            $result = self::callAi($profile, $base64, $mimeType, $prompt);
+        }
+
         if ($result && $providerSlug) {
             $result['provider'] = $providerSlug;
         }
@@ -86,6 +94,14 @@ Si no coincide con ninguno, respondé: desconocido
 PROMPT;
 
         $text = self::callAiRaw($profile, $base64, $mimeType, $prompt);
+
+        // Si falla (posible 429), reintentar una vez después de esperar
+        if (! $text && self::$lastError && str_contains(self::$lastError, '429')) {
+            \Log::info("InvoiceParser: Rate limit en Etapa 1, reintentando en 10 segundos...");
+            sleep(10);
+            self::$lastError = null;
+            $text = self::callAiRaw($profile, $base64, $mimeType, $prompt);
+        }
 
         if (! $text) {
             return null;
