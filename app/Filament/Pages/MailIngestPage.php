@@ -203,6 +203,33 @@ class MailIngestPage extends Page implements HasForms
             ->send();
     }
 
+    /**
+     * Procesa histórico: busca mails de los últimos N días (máx 730 = 2 años).
+     */
+    public function processHistorical(): void
+    {
+        $config = MailIngestConfig::where('is_active', true)->first();
+
+        if (! $config) {
+            Notification::make()
+                ->title('Ingesta no activa')
+                ->body('Activá la ingesta primero.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        // Buscar 2 años atrás
+        $service = new MailIngestService($config);
+        $stats = $service->process(lookbackDays: 730);
+
+        Notification::make()
+            ->title('Ingesta histórica ejecutada')
+            ->body("Procesadas: {$stats['processed']} | Errores: {$stats['errors']} | Omitidas: {$stats['skipped']}")
+            ->success()
+            ->send();
+    }
+
     public function getConfig(): ?MailIngestConfig
     {
         return MailIngestConfig::first();

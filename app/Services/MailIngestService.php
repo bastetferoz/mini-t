@@ -20,8 +20,9 @@ class MailIngestService
 
     /**
      * Procesa los mails no leídos del buzón configurado.
+     * @param int $lookbackDays Días hacia atrás para buscar (0 = sin filtro de fecha, trae recientes)
      */
-    public function process(): array
+    public function process(int $lookbackDays = 0): array
     {
         $stats = ['processed' => 0, 'errors' => 0, 'skipped' => 0];
 
@@ -32,8 +33,8 @@ class MailIngestService
             return $stats;
         }
 
-        // Obtener mails no leídos con adjuntos
-        $messages = $this->getUnreadMessages($token);
+        // Obtener mails con adjuntos
+        $messages = $this->getUnreadMessages($token, $lookbackDays);
 
         foreach ($messages as $message) {
             try {
@@ -109,27 +110,76 @@ class MailIngestService
     }
 
     /**
-     * Obtiene mensajes no leídos con adjuntos.
+     * Obtiene mensajes con adjuntos.
+     * Si lookbackDays > 0, filtra por fecha y pagina hasta traer todos.
      */
-    protected function getUnreadMessages(string $token): array
+    protected function getUnreadMessages(string $token, int $lookbackDays = 0): array
     {
-        $response = Http::withToken($token)->get(
-            "https://graph.microsoft.com/v1.0/users/{$this->config->email}/messages",
-            [
-                '$top' => 20,
-                '$select' => 'id,subject,receivedDateTime,from,isRead,hasAttachments',
-            ]
-        );
+        $params = [
+            '$select' => 'id,subject,receivedDateTime,from,isRead,hasAttachments',
+            '$orderby' => 'receivedDateTime desc',
+        ];
 
-        if (! $response->successful()) {
-            Log::error("MailIngest: Error al obtener mails: " . $response->body());
-            return [];
+        if ($lookbackDays > 0) {
+            // Histórico: traer muchos, filtrar por fecha
+            $params['$top'] = 50;
+            $since = now()->subDays($lookbackDays)->format('Y-m-d\TH:i:s\Z');
+            $params['$filter'] = "receivedDateTime ge {$since}";
+        } else {
+            // Normal: solo los últimos 20
+            $params['$top'] = 20;
         }
 
-        // Filtrar localmente los que tienen adjuntos
-        $messages = $response->json('value') ?? [];
+        $allMessages = [];
+        $url = "https://graph.microsoft.com/v1.0/users/{$this->config->email}/messages";
+        $maxPages = $lookbackDays > 0 ? 20 : 1; // Histórico: hasta 20 páginas (1000 mails)
+        $page = 0;
 
-        return array_filter($messages, fn ($msg) => ($msg['hasAttachments'] ?? false) === true);
+        while ($url && $page < $maxPages) {
+            $response = Http::withToken($token)->get($url, $page === 0 ? $params : []);
+
+            if (! $response->successful()) {
+                // Si falla el filtro, intentar sin él (filtrar localmente)
+                if ($page === 0 && $lookbackDays > 0 && str_contains($response->body(), 'InefficientFilter')) {
+                    Log::warning("MailIngest: $filter no soportado, trayendo sin filtro y filtrando localmente");
+                    unset($params['$filter']);
+                    $params['$top'] = 50;
+                    $response = Http::withToken($token)->get(
+                        "https://graph.microsoft.com/v1.0/users/{$this->config->email}/messages",
+                        $params
+                    );
+                    if (! $response->successful()) {
+                        Log::error("MailIngest: Error al obtener mails: " . $response->body());
+                        return [];
+                    }
+                } else {
+                    Log::error("MailIngest: Error al obtener mails: " . $response->body());
+                    return [];
+                }
+            }
+
+            $messages = $response->json('value') ?? [];
+            $allMessages = array_merge($allMessages, $messages);
+
+            // Siguiente página
+            $url = $response->json('@odata.nextLink');
+            $page++;
+        }
+
+        // Filtrar: solo los que tienen adjuntos
+        $filtered = array_filter($allMessages, fn ($msg) => ($msg['hasAttachments'] ?? false) === true);
+
+        // Si es histórico y no se pudo usar $filter, filtrar por fecha localmente
+        if ($lookbackDays > 0) {
+            $since = now()->subDays($lookbackDays);
+            $filtered = array_filter($filtered, function ($msg) use ($since) {
+                $received = $msg['receivedDateTime'] ?? null;
+                if (! $received) return false;
+                return \Carbon\Carbon::parse($received)->gte($since);
+            });
+        }
+
+        return array_values($filtered);
     }
 
     /**

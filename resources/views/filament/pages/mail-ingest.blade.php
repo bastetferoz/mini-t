@@ -46,6 +46,10 @@
             <x-filament::button wire:click="processNow" color="warning">
                 Ejecutar ahora
             </x-filament::button>
+
+            <x-filament::button wire:click="processHistorical" color="danger" wire:confirm="Esto va a buscar mails de los últimos 2 años y procesarlos. Puede demorar bastante. ¿Continuar?">
+                📅 Procesar histórico (2 años)
+            </x-filament::button>
         </div>
     </x-filament::card>
 
