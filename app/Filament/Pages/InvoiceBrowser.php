@@ -202,97 +202,21 @@ class InvoiceBrowser extends Page
                     return;
                 }
 
-                $success = 0;
-                $errors = [];
+                $queued = 0;
 
-                foreach ($files as $index => $filePath) {
-                    // Delay entre facturas para evitar rate limit de la IA
-                    if ($index > 0) {
-                        sleep(3);
-                    }
-
-                    $parsed = InvoiceParserService::parse($filePath);
-
-                    if (! $parsed) {
-                        $errorMsg = basename($filePath) . ': ' . (InvoiceParserService::$lastError ?? 'Error desconocido');
-                        $errors[] = $errorMsg;
-                        \App\Services\ActivityLogger::facturacion("❌ Error al cargar factura: {$errorMsg}");
-                        continue;
-                    }
-
-                    $finalPath = InvoiceParserService::organizeFile($filePath, $parsed);
-                    $provider = InvoiceParserService::normalizeProvider($parsed['provider'] ?? null);
-                    $period = $parsed['period'] ?? now()->format('Y-m');
-                    $parts = explode('-', $period);
-
-                    // Verificar duplicado por número de factura
-                    $invoiceNumber = $parsed['invoice_number'] ?? null;
-                    if ($invoiceNumber) {
-                        $duplicate = Invoice::where('invoice_number', $invoiceNumber)
-                            ->where('provider', $provider)
-                            ->exists();
-
-                        if ($duplicate) {
-                            $errors[] = basename($filePath) . ': Duplicada (Nº ' . $invoiceNumber . ')';
-                            \App\Services\ActivityLogger::facturacion("⚠️ Factura duplicada omitida: {$provider} Nº {$invoiceNumber}");
-                            continue;
-                        }
-                    }
-
-                    $invoice = Invoice::create([
-                        'provider' => $provider,
-                        'company' => $parsed['company'] ?? null,
-                        'service' => $parsed['service'] ?? null,
-                        'reference' => $parsed['reference'] ?? null,
-                        'amount' => $parsed['amount'] ?? 0,
-                        'currency' => $parsed['currency'] ?? 'ARS',
-                        'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
-                        'period' => $period,
-                        'month' => (int) ($parts[1] ?? now()->month),
-                        'year' => (int) ($parts[0] ?? now()->year),
-                        'invoice_number' => $parsed['invoice_number'] ?? null,
-                        'file_path' => $finalPath,
-                        'notes' => 'Cargada automáticamente con IA',
-                    ]);
-
-                    // Tipo de cambio
-                    if ($invoice->currency === 'ARS') {
-                        $rate = \App\Services\ExchangeRateService::getBnaRate(
-                            $invoice->invoice_date->format('Y-m-d')
-                        );
-                        if ($rate) {
-                            $invoice->update([
-                                'exchange_rate' => $rate,
-                                'amount_usd' => round($invoice->amount / $rate, 2),
-                            ]);
-                        }
-                    } elseif ($invoice->currency === 'USD') {
-                        $invoice->update([
-                            'exchange_rate' => 1,
-                            'amount_usd' => $invoice->amount,
-                        ]);
-                    }
-
-                    $success++;
-                    \App\Services\ActivityLogger::facturacion("✓ Factura cargada: {$provider} | \${$parsed['amount']} | {$period}", $invoice);
+                foreach ($files as $filePath) {
+                    \App\Jobs\ProcessInvoiceFile::dispatch($filePath)
+                        ->delay(now()->addSeconds($queued * 5)); // 5s entre cada una
+                    $queued++;
                 }
 
-                // Notificaciones
-                if ($success > 0) {
-                    Notification::make()
-                        ->title("{$success} factura(s) cargada(s)")
-                        ->success()
-                        ->send();
-                }
+                Notification::make()
+                    ->title("{$queued} factura(s) en cola")
+                    ->body('Se procesan en segundo plano. Refrescá la página en unos minutos para verlas.')
+                    ->success()
+                    ->send();
 
-                if (! empty($errors)) {
-                    Notification::make()
-                        ->title(count($errors) . ' archivo(s) con error')
-                        ->body(implode("\n", array_slice($errors, 0, 5)))
-                        ->danger()
-                        ->persistent()
-                        ->send();
-                }
+                \App\Services\ActivityLogger::facturacion("📥 {$queued} factura(s) encoladas para procesamiento con IA");
             });
     }
 

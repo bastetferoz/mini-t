@@ -1,0 +1,17 @@
+# Copiar a /etc/systemd/system/mini-t-worker.service
+# Después: sudo systemctl enable mini-t-worker && sudo systemctl start mini-t-worker
+
+[Unit]
+Description=Mini-T Queue Worker
+After=network.target mysql.service
+
+[Service]
+User=ubuntu
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/home/ubuntu/mini-t
+ExecStart=/usr/bin/php artisan queue:work database --sleep=3 --tries=3 --max-time=3600 --timeout=120
+
+[Install]
+WantedBy=multi-user.target
