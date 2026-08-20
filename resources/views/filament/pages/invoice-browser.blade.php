@@ -1,5 +1,41 @@
 <x-filament-panels::page>
 
+    {{-- Estado de la cola de procesamiento --}}
+    @php
+        $pendingJobs = \DB::table('jobs')->where('queue', 'default')->count();
+        $failedJobs = \DB::table('failed_jobs')->count();
+        $recentProcessed = \App\Models\Invoice::where('created_at', '>=', now()->subHour())->count();
+    @endphp
+    @if($pendingJobs > 0 || $failedJobs > 0 || $recentProcessed > 0)
+    <div class="mb-6 flex items-center gap-4 bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
+        <span class="text-xs text-gray-400 font-medium">Cola IA:</span>
+        @if($pendingJobs > 0)
+            <span class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span class="text-sm text-amber-400 font-medium">{{ $pendingJobs }} pendiente{{ $pendingJobs > 1 ? 's' : '' }}</span>
+            </span>
+        @endif
+        @if($recentProcessed > 0)
+            <span class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                <span class="text-sm text-green-400">{{ $recentProcessed }} procesada{{ $recentProcessed > 1 ? 's' : '' }} (última hora)</span>
+            </span>
+        @endif
+        @if($failedJobs > 0)
+            <span class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-red-400"></span>
+                <span class="text-sm text-red-400">{{ $failedJobs }} fallida{{ $failedJobs > 1 ? 's' : '' }}</span>
+            </span>
+        @endif
+        @if($pendingJobs === 0 && $failedJobs === 0 && $recentProcessed === 0)
+            <span class="text-sm text-gray-500">Sin actividad</span>
+        @endif
+        <button wire:click="$refresh" class="ml-auto text-gray-500 hover:text-white transition text-xs" title="Refrescar">
+            🔄
+        </button>
+    </div>
+    @endif
+
     {{-- Botones de carga --}}
     <div class="flex justify-end gap-3 mb-6">
         <x-filament::button wire:click="removeDuplicates" color="warning" icon="heroicon-o-trash" size="sm" wire:confirm="¿Eliminar todas las facturas duplicadas? Se conserva la primera de cada grupo.">

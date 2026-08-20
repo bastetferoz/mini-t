@@ -46,10 +46,6 @@
             <x-filament::button wire:click="processNow" color="warning">
                 Ejecutar ahora
             </x-filament::button>
-
-            <x-filament::button wire:click="processHistorical" color="danger" wire:confirm="Esto va a buscar mails de los últimos 2 años y procesarlos. Puede demorar bastante. ¿Continuar?">
-                📅 Procesar histórico (2 años)
-            </x-filament::button>
         </div>
     </x-filament::card>
 
@@ -64,6 +60,13 @@
             <p>5. En <strong>Certificates & secrets</strong> crear un Client Secret</p>
             <p>6. Copiar: Tenant ID, Client ID y Client Secret acá</p>
             <p>7. Guardar y probar con "Test conexión"</p>
+        </div>
+
+        <h3 class="text-sm font-semibold text-white mt-6 mb-3">Crontab (requerido en producción)</h3>
+        <div class="text-xs text-gray-400 space-y-2">
+            <p>Para que la ingesta automática funcione, el servidor necesita este cron:</p>
+            <code class="block bg-gray-900 px-3 py-2 rounded text-amber-400 font-mono">* * * * * cd /home/ubuntu/mini-t && php artisan schedule:run >> /dev/null 2>&1</code>
+            <p class="mt-2">Verificar con: <code class="bg-gray-800 px-1 rounded">crontab -l</code></p>
         </div>
     </x-filament::card>
 

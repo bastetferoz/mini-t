@@ -56,4 +56,21 @@ sudo chmod -R 775 storage bootstrap/cache
 # Reiniciar PHP-FPM
 sudo systemctl restart php8.5-fpm
 
+# Crontab para scheduler (si no existe)
+CRON_JOB="* * * * * cd /home/ubuntu/mini-t && php artisan schedule:run >> /dev/null 2>&1"
+(crontab -l 2>/dev/null | grep -q "schedule:run") || (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+echo "  → Crontab verificado"
+
+# Queue worker service (si no existe)
+if [ ! -f /etc/systemd/system/mini-t-worker.service ]; then
+    sudo cp queue-worker.service /etc/systemd/system/mini-t-worker.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable mini-t-worker
+    sudo systemctl start mini-t-worker
+    echo "  → Queue worker instalado"
+else
+    sudo systemctl restart mini-t-worker
+    echo "  → Queue worker reiniciado"
+fi
+
 echo "✅ Actualización completada."
