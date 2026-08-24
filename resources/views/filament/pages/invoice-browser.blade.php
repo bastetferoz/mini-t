@@ -127,11 +127,14 @@
             $monthNames = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
         @endphp
 
-        {{-- Botón reclasificar si estamos en "otro" --}}
+        {{-- Botones reclasificar si estamos en "otro" --}}
         @if($selectedProvider === 'otro' && $invoices->count() > 0)
-            <div class="mb-4">
+            <div class="mb-4 flex gap-3">
                 <x-filament::button wire:click="reclassifyAll" color="info" icon="heroicon-o-arrow-path" size="sm">
-                    Reclasificar todas ({{ $invoices->count() }})
+                    Reclasificar por keywords ({{ $invoices->count() }})
+                </x-filament::button>
+                <x-filament::button wire:click="reclassifyWithAi" color="success" icon="heroicon-o-sparkles" size="sm" wire:confirm="¿Reprocesar {{ $invoices->where('file_path', '!=', '')->count() }} factura(s) con IA? Puede demorar unos segundos por factura.">
+                    Reclasificar con IA ({{ $invoices->where('file_path', '!=', '')->count() }})
                 </x-filament::button>
             </div>
         @endif

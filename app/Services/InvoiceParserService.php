@@ -121,6 +121,34 @@ PROMPT;
     }
 
     /**
+     * Re-identifica el proveedor de una factura existente usando la IA.
+     * Solo corre la etapa 1 (identificación) sin re-extraer datos.
+     */
+    public static function reidentifyProvider(string $filePath): ?string
+    {
+        self::$lastError = null;
+
+        $profile = AiProfile::getDefault();
+
+        if (! $profile) {
+            self::$lastError = 'No hay perfil de IA predeterminado configurado.';
+            return null;
+        }
+
+        $fullPath = Storage::disk('public')->path($filePath);
+
+        if (! file_exists($fullPath)) {
+            self::$lastError = "Archivo no encontrado: {$filePath}";
+            return null;
+        }
+
+        $mimeType = mime_content_type($fullPath) ?: 'image/jpeg';
+        $base64 = base64_encode(file_get_contents($fullPath));
+
+        return self::identifyProvider($profile, $base64, $mimeType);
+    }
+
+    /**
      * Arma el prompt de extracción según el proveedor.
      */
     private static function buildExtractionPrompt(?InvoiceProvider $provider): string

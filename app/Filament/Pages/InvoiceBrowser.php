@@ -149,6 +149,70 @@ class InvoiceBrowser extends Page
     }
 
     /**
+     * Reclasifica facturas de "otro" usando la IA (re-corre la etapa 1).
+     * Solo para facturas que tienen archivo adjunto.
+     */
+    public function reclassifyWithAi(): void
+    {
+        $invoices = Invoice::where('provider', 'otro')
+            ->when($this->selectedYear, fn ($q) => $q->where('year', $this->selectedYear))
+            ->whereNotNull('file_path')
+            ->where('file_path', '!=', '')
+            ->get();
+
+        if ($invoices->isEmpty()) {
+            Notification::make()
+                ->title('Sin facturas para reprocesar')
+                ->body('No hay facturas en "Otro" con archivo adjunto.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $reclassified = 0;
+        $errors = 0;
+
+        foreach ($invoices as $invoice) {
+            $newProvider = InvoiceParserService::reidentifyProvider($invoice->file_path);
+
+            if ($newProvider && $newProvider !== 'otro') {
+                $invoice->update(['provider' => $newProvider]);
+                $reclassified++;
+            } else {
+                $errors++;
+            }
+
+            // Delay entre llamadas para evitar rate limit
+            if ($invoices->count() > 1) {
+                sleep(3);
+            }
+        }
+
+        $body = $reclassified > 0
+            ? "{$reclassified} identificada(s) correctamente."
+            : 'La IA no pudo identificar ninguna.';
+
+        if ($errors > 0) {
+            $body .= " {$errors} sin resultado.";
+        }
+
+        if (InvoiceParserService::$lastError) {
+            $body .= "\nÚltimo error: " . InvoiceParserService::$lastError;
+        }
+
+        Notification::make()
+            ->title("{$reclassified} factura(s) reclasificada(s) con IA")
+            ->body($body)
+            ->color($reclassified > 0 ? 'success' : 'warning')
+            ->duration(10000)
+            ->send();
+
+        if ($reclassified > 0) {
+            \App\Services\ActivityLogger::facturacion("🤖 {$reclassified} factura(s) reclasificada(s) con IA desde 'otro'");
+        }
+    }
+
+    /**
      * Label amigable del proveedor.
      */
     public function getProviderLabel(string $provider): string
