@@ -54,6 +54,7 @@ class InvoiceAnalysis extends Page
     {
         return Invoice::selectRaw('DISTINCT provider')
             ->whereNotNull('provider')
+            ->where('provider', '!=', 'otro')
             ->orderBy('provider')
             ->pluck('provider')
             ->toArray();
