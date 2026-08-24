@@ -22,12 +22,19 @@ class InvoiceAnalysis extends Page
     public array $selectedProviders = [];
     public array $selectedCompanies = [];
     public string $viewMode = 'providers'; // providers, companies, projects
+    public ?string $selectedChartProvider = null; // Proveedor seleccionado para gráfico de velas
 
     public function mount(): void
     {
         $this->selectedYear = (string) now()->year;
         $this->selectedProviders = $this->getAvailableProviders();
         $this->selectedCompanies = $this->getAvailableCompanies();
+    }
+
+    public function selectYear(string $year): void
+    {
+        $this->selectedYear = $year;
+        $this->selectedChartProvider = null;
     }
 
     // ─── OPCIONES DISPONIBLES ───
@@ -85,6 +92,63 @@ class InvoiceAnalysis extends Page
     public function deselectAllProviders(): void
     {
         $this->selectedProviders = [];
+    }
+
+    public function toggleChartProvider(string $provider): void
+    {
+        $this->selectedChartProvider = $this->selectedChartProvider === $provider ? null : $provider;
+    }
+
+    /**
+     * Datos para el gráfico de velas del proveedor seleccionado.
+     * Devuelve datos de los últimos 2 años para comparar.
+     */
+    public function getCandlestickData(): array
+    {
+        if (! $this->selectedChartProvider) {
+            return [];
+        }
+
+        $currentYear = (int) $this->selectedYear;
+        $previousYear = $currentYear - 1;
+        $provider = $this->selectedChartProvider;
+        $convertToUsd = ($this->viewMode === 'companies');
+
+        $result = ['current' => [], 'previous' => [], 'provider' => $provider];
+
+        foreach ([$currentYear, $previousYear] as $year) {
+            $key = $year === $currentYear ? 'current' : 'previous';
+
+            for ($m = 1; $m <= 12; $m++) {
+                if ($convertToUsd) {
+                    $query = Invoice::where('year', $year)
+                        ->where('provider', $provider)
+                        ->where('month', $m)
+                        ->when(! empty($this->selectedCompanies), fn ($q) => $q->where(function ($sq) {
+                            $sq->whereIn('company', $this->selectedCompanies)
+                               ->orWhereNull('company')
+                               ->orWhere('company', '');
+                        }));
+
+                    $usd = (float) (clone $query)->where('currency', 'USD')->sum('amount');
+                    $ars = (float) (clone $query)->where('currency', 'ARS')->sum('amount');
+                    $arsInUsd = $ars > 0 ? (\App\Services\ExchangeRateService::convertToUsd($ars, $year, $m) ?? 0) : 0;
+                    $result[$key][$m] = round($usd + $arsInUsd, 2);
+                } else {
+                    $result[$key][$m] = round((float) Invoice::where('year', $year)
+                        ->where('provider', $provider)
+                        ->where('month', $m)
+                        ->when(! empty($this->selectedCompanies), fn ($q) => $q->where(function ($sq) {
+                            $sq->whereIn('company', $this->selectedCompanies)
+                               ->orWhereNull('company')
+                               ->orWhere('company', '');
+                        }))
+                        ->sum('amount'), 2);
+                }
+            }
+        }
+
+        return $result;
     }
 
     public function selectAllCompanies(): void

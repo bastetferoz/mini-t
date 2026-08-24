@@ -232,6 +232,42 @@ class InvoiceBrowser extends Page
     }
 
     /**
+     * Fuerza la asignación de proveedor a una factura individual.
+     */
+    public function reassignProvider(int $invoiceId, string $newProvider): void
+    {
+        $invoice = Invoice::find($invoiceId);
+
+        if (! $invoice) {
+            return;
+        }
+
+        $oldProvider = $invoice->provider;
+
+        if ($oldProvider === $newProvider) {
+            return;
+        }
+
+        $invoice->update(['provider' => $newProvider]);
+
+        $label = $this->getProviderLabel($newProvider);
+        \App\Services\ActivityLogger::facturacion("🔀 Factura #{$invoice->id} movida de '{$oldProvider}' a '{$newProvider}'");
+
+        Notification::make()
+            ->title("Factura movida a {$label}")
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Devuelve las opciones de proveedor disponibles para el selector inline.
+     */
+    public function getProviderOptions(): array
+    {
+        return \App\Models\InvoiceProvider::getOptions() + ['otro' => 'Otro'];
+    }
+
+    /**
      * Elimina una factura individual.
      */
     public function deleteInvoice(int $invoiceId): void
