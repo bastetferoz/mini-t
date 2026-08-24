@@ -24,11 +24,22 @@ class InvoiceAnalysis extends Page
     public string $viewMode = 'providers'; // providers, companies, projects
     public ?string $selectedChartProvider = null; // Proveedor seleccionado para gráfico de velas
 
+    // Vistas guardadas
+    public ?int $activeViewId = null;
+    public string $newViewName = '';
+    public bool $showSaveView = false;
+
     public function mount(): void
     {
         $this->selectedYear = (string) now()->year;
         $this->selectedProviders = $this->getAvailableProviders();
         $this->selectedCompanies = $this->getAvailableCompanies();
+
+        // Cargar vista por defecto si existe
+        $defaultView = \App\Models\AnalysisView::forCurrentUser()->where('is_default', true)->first();
+        if ($defaultView) {
+            $this->applyViewFilters($defaultView);
+        }
     }
 
     public function selectYear(string $year): void
@@ -159,6 +170,132 @@ class InvoiceAnalysis extends Page
     public function deselectAllCompanies(): void
     {
         $this->selectedCompanies = [];
+    }
+
+    // ─── VISTAS GUARDADAS ───
+
+    /**
+     * Obtiene las vistas guardadas del usuario actual.
+     */
+    public function getSavedViews(): array
+    {
+        return \App\Models\AnalysisView::forCurrentUser()
+            ->get()
+            ->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'is_default' => $v->is_default])
+            ->toArray();
+    }
+
+    /**
+     * Guarda la vista actual con un nombre.
+     */
+    public function saveView(): void
+    {
+        $name = trim($this->newViewName);
+
+        if (blank($name)) {
+            $this->addError('newViewName', 'El nombre es obligatorio.');
+            return;
+        }
+
+        $filters = [
+            'providers' => $this->selectedProviders,
+            'companies' => $this->selectedCompanies,
+            'viewMode' => $this->viewMode,
+        ];
+
+        $view = \App\Models\AnalysisView::create([
+            'name' => $name,
+            'filters' => $filters,
+            'user_id' => auth()->id(),
+            'is_default' => false,
+        ]);
+
+        $this->activeViewId = $view->id;
+        $this->newViewName = '';
+        $this->showSaveView = false;
+
+        \Filament\Notifications\Notification::make()
+            ->title("Vista \"{$name}\" guardada")
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Carga una vista guardada.
+     */
+    public function loadView(int $viewId): void
+    {
+        $view = \App\Models\AnalysisView::forCurrentUser()->find($viewId);
+
+        if (! $view) {
+            return;
+        }
+
+        $this->applyViewFilters($view);
+    }
+
+    /**
+     * Aplica los filtros de una vista.
+     */
+    private function applyViewFilters(\App\Models\AnalysisView $view): void
+    {
+        $filters = $view->filters;
+
+        $this->selectedProviders = $filters['providers'] ?? $this->getAvailableProviders();
+        $this->selectedCompanies = $filters['companies'] ?? $this->getAvailableCompanies();
+        $this->viewMode = $filters['viewMode'] ?? 'providers';
+        $this->activeViewId = $view->id;
+        $this->selectedChartProvider = null;
+    }
+
+    /**
+     * Marca/desmarca una vista como predeterminada.
+     */
+    public function toggleDefaultView(int $viewId): void
+    {
+        // Quitar default de todas las del usuario
+        \App\Models\AnalysisView::where('user_id', auth()->id())->update(['is_default' => false]);
+
+        $view = \App\Models\AnalysisView::forCurrentUser()->find($viewId);
+        if ($view) {
+            $view->update(['is_default' => true]);
+        }
+    }
+
+    /**
+     * Elimina una vista guardada.
+     */
+    public function deleteView(int $viewId): void
+    {
+        $view = \App\Models\AnalysisView::forCurrentUser()->find($viewId);
+
+        if (! $view) {
+            return;
+        }
+
+        $name = $view->name;
+        $view->delete();
+
+        if ($this->activeViewId === $viewId) {
+            $this->activeViewId = null;
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title("Vista \"{$name}\" eliminada")
+            ->success()
+            ->send();
+    }
+
+    /**
+     * Desactiva la vista activa y muestra todo.
+     */
+    public function clearView(): void
+    {
+        $this->activeViewId = null;
+        $this->selectedProviders = $this->getAvailableProviders();
+        $this->selectedCompanies = $this->getAvailableCompanies();
+        $this->viewMode = 'providers';
+        $this->selectedChartProvider = null;
     }
 
     // ─── QUERIES ───

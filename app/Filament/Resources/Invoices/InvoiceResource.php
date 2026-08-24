@@ -253,6 +253,8 @@ class InvoiceResource extends Resource
                                     $record->reference,
                                     $record->notes,
                                     $record->invoice_number,
+                                    $record->file_path,
+                                    $record->project,
                                 ])));
 
                                 $matched = null;

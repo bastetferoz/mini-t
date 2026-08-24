@@ -91,6 +91,9 @@ class InvoiceBrowser extends Page
     /**
      * Reclasifica las facturas de "otro" usando keywords de proveedores.
      */
+    /**
+     * Reclasifica las facturas de "otro" usando keywords de proveedores.
+     */
     public function reclassifyAll(): void
     {
         $invoices = Invoice::where('provider', 'otro')
@@ -99,30 +102,49 @@ class InvoiceBrowser extends Page
 
         $providers = \App\Models\InvoiceProvider::where('is_active', true)->get();
         $reclassified = 0;
+        $noMatch = [];
 
         foreach ($invoices as $invoice) {
+            // Buscar en todos los campos de texto relevantes incluyendo file_path
             $searchText = strtolower(implode(' ', array_filter([
                 $invoice->service,
                 $invoice->reference,
                 $invoice->notes,
                 $invoice->invoice_number,
+                $invoice->file_path,
+                $invoice->project,
             ])));
 
+            $matched = false;
             foreach ($providers as $provider) {
                 foreach ($provider->detection_keywords ?? [] as $keyword) {
                     if (str_contains($searchText, strtolower($keyword))) {
                         $invoice->update(['provider' => $provider->slug]);
                         $reclassified++;
+                        $matched = true;
                         break 2;
                     }
                 }
             }
+
+            if (! $matched) {
+                $noMatch[] = "#{$invoice->id}: [{$invoice->service}] [{$invoice->reference}] [{$invoice->invoice_number}]";
+            }
+        }
+
+        $body = $reclassified > 0
+            ? "Se movieron {$reclassified} a su carpeta correcta."
+            : 'Ninguna coincidió con las keywords configuradas.';
+
+        if (! empty($noMatch) && count($noMatch) <= 5) {
+            $body .= "\nSin match: " . implode(' | ', $noMatch);
         }
 
         Notification::make()
             ->title("{$reclassified} factura(s) reclasificada(s)")
-            ->body($reclassified > 0 ? 'Se movieron a su carpeta correcta.' : 'Ninguna coincidió con las keywords configuradas.')
+            ->body($body)
             ->color($reclassified > 0 ? 'success' : 'warning')
+            ->duration(10000)
             ->send();
     }
 

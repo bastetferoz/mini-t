@@ -66,6 +66,89 @@
         </div>
     </div>
 
+    {{-- ═══ VISTAS GUARDADAS ═══ --}}
+    <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-4 mb-4">
+        <div class="flex items-center gap-3 flex-wrap">
+            {{-- Label --}}
+            <span class="text-xs text-gray-400 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                <x-heroicon-o-bookmark class="w-4 h-4" />
+                Vistas
+            </span>
+
+            {{-- Pill "Todas" (sin filtro) --}}
+            <button
+                wire:click="clearView"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium transition {{ !$activeViewId ? 'bg-amber-500 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600' }}"
+            >
+                Todas
+            </button>
+
+            {{-- Vistas guardadas --}}
+            @foreach($this->getSavedViews() as $view)
+                <div class="flex items-center gap-0.5 group">
+                    <button
+                        wire:click="loadView({{ $view['id'] }})"
+                        class="px-3 py-1.5 rounded-l-lg text-xs font-medium transition {{ $activeViewId === $view['id'] ? 'bg-amber-500 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600 border-r-0' }}"
+                    >
+                        {{ $view['name'] }}
+                        @if($view['is_default'])
+                            <span class="ml-1 text-[9px]">⭐</span>
+                        @endif
+                    </button>
+                    {{-- Acciones de la vista --}}
+                    <div class="flex {{ $activeViewId === $view['id'] ? '' : 'border border-gray-600 border-l-0' }} rounded-r-lg overflow-hidden">
+                        <button
+                            wire:click="toggleDefaultView({{ $view['id'] }})"
+                            class="px-1.5 py-1.5 text-xs transition {{ $activeViewId === $view['id'] ? 'bg-amber-600 text-gray-900 hover:bg-amber-700' : 'bg-gray-700 text-gray-500 hover:text-amber-400 hover:bg-gray-600' }}"
+                            title="Marcar como predeterminada"
+                        >
+                            <x-heroicon-o-star class="w-3 h-3" />
+                        </button>
+                        <button
+                            wire:click="deleteView({{ $view['id'] }})"
+                            wire:confirm="¿Eliminar la vista '{{ $view['name'] }}'?"
+                            class="px-1.5 py-1.5 text-xs transition {{ $activeViewId === $view['id'] ? 'bg-amber-600 text-gray-900 hover:bg-red-600 hover:text-white' : 'bg-gray-700 text-gray-500 hover:text-red-400 hover:bg-gray-600' }}"
+                            title="Eliminar vista"
+                        >
+                            <x-heroicon-o-x-mark class="w-3 h-3" />
+                        </button>
+                    </div>
+                </div>
+            @endforeach
+
+            {{-- Botón guardar nueva vista --}}
+            @if(!$showSaveView)
+                <button
+                    wire:click="$set('showSaveView', true)"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-400 hover:text-amber-400 hover:bg-gray-600 border border-dashed border-gray-600 transition flex items-center gap-1"
+                >
+                    <x-heroicon-o-plus class="w-3 h-3" />
+                    Guardar vista
+                </button>
+            @else
+                <div class="flex items-center gap-2">
+                    <input
+                        type="text"
+                        wire:model="newViewName"
+                        wire:keydown.enter="saveView"
+                        placeholder="Nombre de la vista..."
+                        class="rounded-lg border-gray-600 bg-gray-900 text-white text-xs px-3 py-1.5 w-40 focus:border-amber-500 focus:ring-amber-500"
+                        autofocus
+                    />
+                    <button wire:click="saveView" class="px-2.5 py-1.5 rounded-lg bg-amber-500 text-gray-900 text-xs font-medium hover:bg-amber-400 transition">
+                        <x-heroicon-o-check class="w-3.5 h-3.5" />
+                    </button>
+                    <button wire:click="$set('showSaveView', false)" class="px-2.5 py-1.5 rounded-lg bg-gray-700 text-gray-400 text-xs hover:bg-gray-600 transition">
+                        <x-heroicon-o-x-mark class="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            @endif
+        </div>
+        @error('newViewName')
+            <p class="text-xs text-red-400 mt-2">{{ $message }}</p>
+        @enderror
+    </div>
+
     {{-- ═══ FILTROS ═══ --}}
     <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-5 mb-6">
         <div class="flex flex-wrap items-end gap-6">
