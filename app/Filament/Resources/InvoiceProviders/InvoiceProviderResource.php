@@ -41,7 +41,9 @@ class InvoiceProviderResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->placeholder('google, amazon, telecom')
-                ->helperText('Identificador único en minúsculas, sin espacios.'),
+                ->rules(['regex:/^[a-z0-9_-]+$/'])
+                ->dehydrateStateUsing(fn ($state) => strtolower(preg_replace('/[^a-z0-9_-]/', '', strtolower($state ?? ''))))
+                ->helperText('Solo minúsculas, números, guiones (-) y guiones bajos (_). Sin espacios.'),
 
             Select::make('category')
                 ->label('Categoría')
