@@ -154,7 +154,7 @@ class InvoiceBrowser extends Page
      */
     public function reclassifyWithAi(): void
     {
-        $invoices = Invoice::where('provider', 'otro')
+        $invoices = Invoice::where('provider', $this->selectedProvider)
             ->when($this->selectedYear, fn ($q) => $q->where('year', $this->selectedYear))
             ->whereNotNull('file_path')
             ->where('file_path', '!=', '')
@@ -163,23 +163,41 @@ class InvoiceBrowser extends Page
         if ($invoices->isEmpty()) {
             Notification::make()
                 ->title('Sin facturas para reprocesar')
-                ->body('No hay facturas en "Otro" con archivo adjunto.')
+                ->body('No hay facturas con archivo adjunto en esta carpeta.')
                 ->warning()
                 ->send();
             return;
         }
 
-        $reclassified = 0;
+        $updated = 0;
         $errors = 0;
+        $isOtro = ($this->selectedProvider === 'otro');
 
         foreach ($invoices as $invoice) {
-            $newProvider = InvoiceParserService::reidentifyProvider($invoice->file_path);
+            if ($isOtro) {
+                // En "otro": solo re-identificar proveedor
+                $newProvider = InvoiceParserService::reidentifyProvider($invoice->file_path);
 
-            if ($newProvider && $newProvider !== 'otro') {
-                $invoice->update(['provider' => $newProvider]);
-                $reclassified++;
+                if ($newProvider && $newProvider !== 'otro') {
+                    $invoice->update(['provider' => $newProvider]);
+                    $updated++;
+                } else {
+                    $errors++;
+                }
             } else {
-                $errors++;
+                // En proveedor específico: reprocesar datos completos (etapa 2)
+                $parsed = InvoiceParserService::parse($invoice->file_path);
+
+                if ($parsed) {
+                    $invoice->update(array_filter([
+                        'service' => $parsed['service'] ?? $invoice->service,
+                        'reference' => $parsed['reference'] ?? $invoice->reference,
+                        'company' => $parsed['company'] ?? $invoice->company,
+                    ]));
+                    $updated++;
+                } else {
+                    $errors++;
+                }
             }
 
             // Delay entre llamadas para evitar rate limit
@@ -188,9 +206,10 @@ class InvoiceBrowser extends Page
             }
         }
 
-        $body = $reclassified > 0
-            ? "{$reclassified} identificada(s) correctamente."
-            : 'La IA no pudo identificar ninguna.';
+        $action = $isOtro ? 'reclasificada(s)' : 'reprocesada(s)';
+        $body = $updated > 0
+            ? "{$updated} {$action} correctamente."
+            : 'La IA no pudo procesar ninguna.';
 
         if ($errors > 0) {
             $body .= " {$errors} sin resultado.";
@@ -201,14 +220,14 @@ class InvoiceBrowser extends Page
         }
 
         Notification::make()
-            ->title("{$reclassified} factura(s) reclasificada(s) con IA")
+            ->title("{$updated} factura(s) {$action} con IA")
             ->body($body)
-            ->color($reclassified > 0 ? 'success' : 'warning')
+            ->color($updated > 0 ? 'success' : 'warning')
             ->duration(10000)
             ->send();
 
-        if ($reclassified > 0) {
-            \App\Services\ActivityLogger::facturacion("🤖 {$reclassified} factura(s) reclasificada(s) con IA desde 'otro'");
+        if ($updated > 0) {
+            \App\Services\ActivityLogger::facturacion("🤖 {$updated} factura(s) {$action} con IA en '{$this->selectedProvider}'");
         }
     }
 
