@@ -62,7 +62,7 @@ class InvoiceAnalysis extends Page
 
     public function getAvailableCompanies(): array
     {
-        return ['novatech', 'phinxlab'];
+        return ['novatech', 'phinxlab', 'cryptopatagonia'];
     }
 
     public function getAvailableYears(): array
