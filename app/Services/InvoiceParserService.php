@@ -35,7 +35,22 @@ class InvoiceParserService
         }
 
         $mimeType = mime_content_type($fullPath) ?: 'image/jpeg';
-        $base64 = base64_encode(file_get_contents($fullPath));
+
+        // Para PDFs multi-página, extraer solo la primera página como imagen
+        if ($mimeType === 'application/pdf') {
+            $firstPageImage = self::extractFirstPageFromPdf($fullPath);
+            if ($firstPageImage) {
+                $base64 = base64_encode($firstPageImage['data']);
+                $mimeType = $firstPageImage['mime'];
+                \Log::info("InvoiceParser: PDF convertido a imagen (primera página)");
+            } else {
+                // Fallback: mandar el PDF tal cual
+                $base64 = base64_encode(file_get_contents($fullPath));
+                \Log::warning("InvoiceParser: No se pudo extraer primera página, enviando PDF completo");
+            }
+        } else {
+            $base64 = base64_encode(file_get_contents($fullPath));
+        }
 
         \Log::info("InvoiceParser: Usando perfil '{$profile->name}' ({$profile->provider}/{$profile->model})");
 
@@ -143,7 +158,19 @@ PROMPT;
         }
 
         $mimeType = mime_content_type($fullPath) ?: 'image/jpeg';
-        $base64 = base64_encode(file_get_contents($fullPath));
+
+        // Para PDFs multi-página, extraer solo la primera página
+        if ($mimeType === 'application/pdf') {
+            $firstPageImage = self::extractFirstPageFromPdf($fullPath);
+            if ($firstPageImage) {
+                $base64 = base64_encode($firstPageImage['data']);
+                $mimeType = $firstPageImage['mime'];
+            } else {
+                $base64 = base64_encode(file_get_contents($fullPath));
+            }
+        } else {
+            $base64 = base64_encode(file_get_contents($fullPath));
+        }
 
         return self::identifyProvider($profile, $base64, $mimeType);
     }
@@ -424,5 +451,70 @@ PROMPT;
         });
 
         return $match?->slug ?? 'otro';
+    }
+
+    /**
+     * Extrae la primera página de un PDF como imagen PNG.
+     * Intenta primero con pdftoppm (poppler-utils), luego con Imagick.
+     */
+    private static function extractFirstPageFromPdf(string $pdfPath): ?array
+    {
+        // Método 1: pdftoppm (poppler-utils)
+        if (self::commandExists('pdftoppm')) {
+            try {
+                $tempFile = tempnam(sys_get_temp_dir(), 'invoice_page_');
+                $command = sprintf(
+                    'pdftoppm -png -f 1 -l 1 -r 200 %s %s',
+                    escapeshellarg($pdfPath),
+                    escapeshellarg($tempFile)
+                );
+
+                exec($command, $output, $returnCode);
+
+                // pdftoppm genera archivo con sufijo -1.png
+                $generatedFile = $tempFile . '-1.png';
+
+                if ($returnCode === 0 && file_exists($generatedFile)) {
+                    $data = file_get_contents($generatedFile);
+                    @unlink($generatedFile);
+                    @unlink($tempFile);
+                    return ['data' => $data, 'mime' => 'image/png'];
+                }
+
+                // Limpiar
+                @unlink($generatedFile);
+                @unlink($tempFile);
+            } catch (\Throwable $e) {
+                \Log::warning("InvoiceParser: pdftoppm falló: " . $e->getMessage());
+            }
+        }
+
+        // Método 2: Imagick
+        if (extension_loaded('imagick')) {
+            try {
+                $imagick = new \Imagick();
+                $imagick->setResolution(200, 200);
+                $imagick->readImage($pdfPath . '[0]'); // [0] = primera página
+                $imagick->setImageFormat('png');
+
+                $data = $imagick->getImageBlob();
+                $imagick->destroy();
+
+                return ['data' => $data, 'mime' => 'image/png'];
+            } catch (\Throwable $e) {
+                \Log::warning("InvoiceParser: Imagick falló: " . $e->getMessage());
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Verifica si un comando existe en el sistema.
+     */
+    private static function commandExists(string $command): bool
+    {
+        $result = shell_exec(sprintf('which %s 2>/dev/null', escapeshellarg($command)));
+        return ! empty(trim($result ?? ''));
     }
 }

@@ -11,6 +11,16 @@ echo "  → Usuario actual: $CURRENT_USER"
 # Fix /tmp (previene error tempnam)
 sudo chmod 1777 /tmp 2>/dev/null
 
+# Dependencias del sistema para procesamiento de facturas PDF
+if ! command -v pdftoppm &> /dev/null; then
+    echo "  → Instalando poppler-utils..."
+    sudo apt install -y poppler-utils
+fi
+if ! php -m 2>/dev/null | grep -q imagick; then
+    echo "  → Instalando php-imagick..."
+    sudo apt install -y php-imagick
+fi
+
 # Bajar cambios
 git pull
 
