@@ -2,7 +2,12 @@
 
 echo "🚀 Instalando proyecto..."
 
-# Dependencias
+# Dependencias del sistema
+echo "📦 Instalando dependencias del sistema..."
+sudo apt update
+sudo apt install -y poppler-utils php-imagick
+
+# Dependencias PHP/Node
 composer install
 npm install
 
@@ -20,6 +25,9 @@ php artisan migrate --seed
 
 # Assets
 npm run build
+
+# Storage link
+php artisan storage:link
 
 # Permisos
 chmod -R 775 storage bootstrap/cache
