@@ -205,8 +205,8 @@ Extraé los datos de esta factura en formato JSON estricto (sin texto adicional,
 Reglas:
 - "amount": numérico, punto como separador decimal, sin puntos de miles.
 - "currency": "ARS" para pesos argentinos, "USD" para dólares.
-- "period": el mes al que corresponde el servicio facturado.
-- "invoice_date": fecha de emisión.
+- "period": el mes al que corresponde el servicio facturado. Si el período de facturación cruza dos meses (ej: 02/06 - 01/07), usar el mes donde cae la MAYOR parte de días del servicio (en ese ejemplo, junio → "2026-06"). Si dice "Billing Period: July 2026" o "Periodo: Julio 2026", usar ese mes directamente.
+- "invoice_date": fecha de emisión de la factura (no confundir con el período de servicio).
 - "company": la empresa que PAGA/IMPUTA este gasto. Solo puede ser una de estas: "phinxlab", "novatech", "cryptopatagonia". Si la factura dice "Phinxlab", "Phinx", "Dinmax", "Velned", "Datanova", "Technology Advisors", "llanmetal", "dmxconsulting", "tradingwasp", "holapepper", "newiter" → es "phinxlab". Si dice "Nova", "Novatech", "Aganon", "nvt-usa", "palitocapital" → es "novatech". Si dice "Cryptopatagonia" → es "cryptopatagonia". Si no podés determinar, usá null.
 - "reference": info adicional como dominio facturado, número de cuenta, plan, etc.
 - Si no podés determinar un campo, usá null.

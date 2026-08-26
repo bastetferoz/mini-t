@@ -47,15 +47,20 @@ class ProcessInvoiceFile implements ShouldQueue
         $period = $parsed['period'] ?? now()->format('Y-m');
         $parts = explode('-', $period);
 
-        // Determinar mes y año: priorizar invoice_date sobre period
-        // (el period puede ser ambiguo en facturas que cruzan meses)
+        // Determinar mes y año: priorizar period sobre invoice_date
+        // El period representa el mes del servicio facturado (ej: "2026-07"),
+        // mientras que invoice_date es la fecha de emisión que puede caer en otro mes.
+        // Ejemplo: Microsoft emite el 02/08 una factura cuyo servicio es de julio.
         $invoiceDate = $parsed['invoice_date'] ?? null;
-        if ($invoiceDate && preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $invoiceDate, $dateMatch)) {
+        if (count($parts) === 2 && is_numeric($parts[0]) && is_numeric($parts[1])) {
+            $year = (int) $parts[0];
+            $month = (int) $parts[1];
+        } elseif ($invoiceDate && preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $invoiceDate, $dateMatch)) {
             $year = (int) $dateMatch[1];
             $month = (int) $dateMatch[2];
         } else {
-            $year = (int) ($parts[0] ?? now()->year);
-            $month = (int) ($parts[1] ?? now()->month);
+            $year = (int) now()->year;
+            $month = (int) now()->month;
         }
 
         // Verificar duplicado por número de factura
