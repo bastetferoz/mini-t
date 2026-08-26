@@ -47,6 +47,17 @@ class ProcessInvoiceFile implements ShouldQueue
         $period = $parsed['period'] ?? now()->format('Y-m');
         $parts = explode('-', $period);
 
+        // Determinar mes y año: priorizar invoice_date sobre period
+        // (el period puede ser ambiguo en facturas que cruzan meses)
+        $invoiceDate = $parsed['invoice_date'] ?? null;
+        if ($invoiceDate && preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $invoiceDate, $dateMatch)) {
+            $year = (int) $dateMatch[1];
+            $month = (int) $dateMatch[2];
+        } else {
+            $year = (int) ($parts[0] ?? now()->year);
+            $month = (int) ($parts[1] ?? now()->month);
+        }
+
         // Verificar duplicado por número de factura
         $invoiceNumber = $parsed['invoice_number'] ?? null;
         if ($invoiceNumber) {
@@ -74,10 +85,10 @@ class ProcessInvoiceFile implements ShouldQueue
             'reference' => $parsed['reference'] ?? null,
             'amount' => $parsed['amount'] ?? 0,
             'currency' => $parsed['currency'] ?? 'ARS',
-            'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
+            'invoice_date' => $invoiceDate ?? now()->toDateString(),
             'period' => $period,
-            'month' => (int) ($parts[1] ?? now()->month),
-            'year' => (int) ($parts[0] ?? now()->year),
+            'month' => $month,
+            'year' => $year,
             'invoice_number' => $invoiceNumber,
             'file_path' => $finalPath,
             'notes' => 'Cargada automáticamente con IA (cola)',
