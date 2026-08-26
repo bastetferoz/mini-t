@@ -169,66 +169,24 @@ class InvoiceBrowser extends Page
             return;
         }
 
-        $updated = 0;
-        $errors = 0;
         $isOtro = ($this->selectedProvider === 'otro');
+        $queued = 0;
 
-        foreach ($invoices as $invoice) {
-            if ($isOtro) {
-                // En "otro": solo re-identificar proveedor
-                $newProvider = InvoiceParserService::reidentifyProvider($invoice->file_path);
-
-                if ($newProvider && $newProvider !== 'otro') {
-                    $invoice->update(['provider' => $newProvider]);
-                    $updated++;
-                } else {
-                    $errors++;
-                }
-            } else {
-                // En proveedor específico: reprocesar datos completos (etapa 2)
-                $parsed = InvoiceParserService::parse($invoice->file_path);
-
-                if ($parsed) {
-                    $invoice->update(array_filter([
-                        'service' => $parsed['service'] ?? $invoice->service,
-                        'reference' => $parsed['reference'] ?? $invoice->reference,
-                        'company' => $parsed['company'] ?? $invoice->company,
-                    ]));
-                    $updated++;
-                } else {
-                    $errors++;
-                }
-            }
-
-            // Delay entre llamadas para evitar rate limit
-            if ($invoices->count() > 1) {
-                sleep(3);
-            }
+        foreach ($invoices as $index => $invoice) {
+            \App\Jobs\ReprocessInvoiceWithAi::dispatch($invoice->id, $isOtro)
+                ->delay(now()->addSeconds($index * 5)); // 5s entre cada una
+            $queued++;
         }
 
-        $action = $isOtro ? 'reclasificada(s)' : 'reprocesada(s)';
-        $body = $updated > 0
-            ? "{$updated} {$action} correctamente."
-            : 'La IA no pudo procesar ninguna.';
-
-        if ($errors > 0) {
-            $body .= " {$errors} sin resultado.";
-        }
-
-        if (InvoiceParserService::$lastError) {
-            $body .= "\nÚltimo error: " . InvoiceParserService::$lastError;
-        }
+        $action = $isOtro ? 'reclasificación' : 'reprocesamiento';
 
         Notification::make()
-            ->title("{$updated} factura(s) {$action} con IA")
-            ->body($body)
-            ->color($updated > 0 ? 'success' : 'warning')
-            ->duration(10000)
+            ->title("{$queued} factura(s) en cola para {$action}")
+            ->body("Se procesan en segundo plano. Refrescá la página en unos minutos.")
+            ->success()
             ->send();
 
-        if ($updated > 0) {
-            \App\Services\ActivityLogger::facturacion("🤖 {$updated} factura(s) {$action} con IA en '{$this->selectedProvider}'");
-        }
+        \App\Services\ActivityLogger::facturacion("🤖 {$queued} factura(s) encoladas para {$action} con IA en '{$this->selectedProvider}'");
     }
 
     /**
