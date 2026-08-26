@@ -20,3 +20,6 @@ Schedule::command('invoices:process-mail')->everyFifteenMinutes();
 
 // Eliminar facturas duplicadas (después de cada ingesta)
 Schedule::command('invoices:remove-duplicates')->everyThirtyMinutes();
+
+// Eliminar facturas caídas en "otro" que ya existen con proveedor identificado
+Schedule::command('invoices:remove-other-duplicates')->everyThirtyMinutes();
