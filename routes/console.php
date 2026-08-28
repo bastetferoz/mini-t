@@ -23,3 +23,7 @@ Schedule::command('invoices:remove-duplicates')->everyThirtyMinutes();
 
 // Eliminar facturas caídas en "otro" que ya existen con proveedor identificado
 Schedule::command('invoices:remove-other-duplicates')->everyThirtyMinutes();
+
+// Leer el contador de páginas de las impresoras. Corre a diario a las 08:00 y el
+// comando decide si hoy es el día de conteo configurado (Setting 'printer_count_day').
+Schedule::command('printers:read-counters --scheduled')->dailyAt('08:00');

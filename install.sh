@@ -5,7 +5,7 @@ echo "🚀 Instalando proyecto..."
 # Dependencias del sistema
 echo "📦 Instalando dependencias del sistema..."
 sudo apt update
-sudo apt install -y poppler-utils php-imagick
+sudo apt install -y poppler-utils php-imagick php-snmp snmp
 
 # Dependencias PHP/Node
 composer install
