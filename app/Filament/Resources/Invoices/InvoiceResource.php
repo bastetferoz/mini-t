@@ -90,7 +90,11 @@ class InvoiceResource extends Resource
                 ->label('Período')
                 ->placeholder('2026-07')
                 ->required()
-                ->helperText('Formato: YYYY-MM (ej: 2026-07)'),
+                ->rule('regex:/^\d{4}-\d{2}$/')
+                ->validationMessages([
+                    'regex' => 'El período debe tener el formato YYYY-MM (ej: 2026-07).',
+                ])
+                ->helperText('Mes del servicio facturado, formato YYYY-MM (ej: 2026-07). El análisis suma las facturas por este período; corregirlo mueve la factura al mes correcto.'),
 
             TextInput::make('invoice_number')
                 ->label('Nº Factura')

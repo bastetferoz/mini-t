@@ -238,6 +238,116 @@ class ImportAssignments extends Page implements HasForms
             ->send();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Exportar Impresoras + lecturas (JSON)
+    |--------------------------------------------------------------------------
+    */
+
+    public function exportPrinters(): StreamedResponse
+    {
+        $printers = \App\Models\Printer::with('readings')->get()->map(function ($printer) {
+            $data = $printer->toArray();
+            // Las lecturas ya vienen anidadas por el with('readings')
+            return $data;
+        })->toArray();
+
+        $filename = 'printers_' . now()->format('Y-m-d_His') . '.json';
+
+        return response()->streamDownload(function () use ($printers) {
+            echo json_encode($printers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        }, $filename, [
+            'Content-Type' => 'application/json',
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Importar Impresoras + lecturas (JSON)
+    |--------------------------------------------------------------------------
+    */
+
+    public function importPrinters(): void
+    {
+        $file = collect($this->backupData['backup_file'] ?? [])->first();
+
+        if (! $file) {
+            Notification::make()
+                ->title('Archivo inválido')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $content = file_get_contents($file->getRealPath());
+        $data = json_decode($content, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || ! is_array($data)) {
+            Notification::make()
+                ->title('Archivo JSON inválido')
+                ->body(json_last_error_msg())
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $printersImported = 0;
+        $readingsImported = 0;
+
+        DB::transaction(function () use ($data, &$printersImported, &$readingsImported) {
+            foreach ($data as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+
+                // Separar las lecturas del resto de los campos de la impresora
+                $readings = $item['readings'] ?? [];
+                unset($item['id'], $item['readings'], $item['created_at'], $item['updated_at']);
+
+                // Clave para no duplicar: IP si tiene, si no el nombre
+                $key = ! empty($item['ip'])
+                    ? ['ip' => $item['ip']]
+                    : ['name' => $item['name'] ?? null];
+
+                if (empty(array_filter($key))) {
+                    continue; // sin IP ni nombre, no se puede identificar
+                }
+
+                $printer = \App\Models\Printer::updateOrCreate($key, $item);
+                $printersImported++;
+
+                // Importar sus lecturas evitando duplicar por (fecha + contador)
+                foreach ($readings as $reading) {
+                    if (! is_array($reading) || empty($reading['read_at'])) {
+                        continue;
+                    }
+
+                    $exists = $printer->readings()
+                        ->where('read_at', $reading['read_at'])
+                        ->where('page_count', $reading['page_count'] ?? null)
+                        ->exists();
+
+                    if ($exists) {
+                        continue;
+                    }
+
+                    $printer->readings()->create([
+                        'page_count' => $reading['page_count'] ?? 0,
+                        'read_at'    => $reading['read_at'],
+                        'source'     => $reading['source'] ?? 'manual',
+                    ]);
+                    $readingsImported++;
+                }
+            }
+        });
+
+        Notification::make()
+            ->title('Impresoras importadas')
+            ->body("{$printersImported} impresora(s) y {$readingsImported} lectura(s) procesadas.")
+            ->success()
+            ->send();
+    }
+
     protected function getForms(): array
     {
         return [

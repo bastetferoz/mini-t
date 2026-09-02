@@ -15,8 +15,14 @@ class PrinterService
     /** hrDeviceDescr (primer dispositivo): nombre del dispositivo */
     private const OID_HR_DEVICE_DESCR = '1.3.6.1.2.1.25.3.2.1.3.1';
 
-    /** prtGeneralPrinterName */
+    /** prtGeneralPrinterName: nombre del motor de impresión (suele traer el modelo real) */
     private const OID_PRT_NAME = '1.3.6.1.2.1.43.5.1.1.16.1';
+
+    /** hrDeviceDescr (primer dispositivo): descripción del hardware (modelo real) */
+    private const OID_HR_DESCR_MODEL = '1.3.6.1.2.1.25.3.2.1.3.1';
+
+    /** Brother — nombre del modelo en rama privada */
+    private const OID_BROTHER_MODEL = '1.3.6.1.4.1.2435.2.3.9.1.1.7.0';
 
     /** prtGeneralSerialNumber */
     private const OID_SERIAL = '1.3.6.1.2.1.43.5.1.1.17.1';
@@ -53,13 +59,16 @@ class PrinterService
             $printer->last_seen_at = now();
         }
 
-        if (! empty($result['brand'])) {
+        // Solo completar marca/modelo/serie si están vacíos.
+        // Así la primera lectura los rellena, pero una corrección manual
+        // (o el valor detectado en el alta) nunca se sobrescribe.
+        if (! empty($result['brand']) && blank($printer->brand)) {
             $printer->brand = $result['brand'];
         }
-        if (! empty($result['model'])) {
+        if (! empty($result['model']) && blank($printer->model)) {
             $printer->model = $result['model'];
         }
-        if (! empty($result['serial'])) {
+        if (! empty($result['serial']) && blank($printer->serial)) {
             $printer->serial = $result['serial'];
         }
 
@@ -105,11 +114,11 @@ class PrinterService
         $descr  = self::snmpGet($ip, $community, self::OID_SYS_DESCR);
         $serial = self::snmpGet($ip, $community, self::OID_SERIAL);
 
-        // Fallbacks para el nombre/modelo si sysDescr no ayuda
-        if (! $descr) {
-            $descr = self::snmpGet($ip, $community, self::OID_PRT_NAME)
-                ?: self::snmpGet($ip, $community, self::OID_HR_DEVICE_DESCR);
-        }
+        // Resolver el MODELO REAL de la máquina.
+        // Ojo: en muchas impresoras (ej. Brother) sysDescr trae el print server
+        // interno (NC-7900w, etc.), no el modelo. Por eso preferimos los OIDs
+        // que describen el motor/hardware de impresión.
+        $model = self::resolveModel($ip, $community, $descr);
 
         // Fallback de serie (Pantum expone la serie real en su rama privada)
         if (! $serial || ! self::looksLikeSerial($serial)) {
@@ -129,15 +138,121 @@ class PrinterService
             }
         }
 
-        [$brand, $model] = self::parseBrandModel($descr);
+        // Separar marca/modelo a partir del mejor texto disponible.
+        // Usamos el modelo real resuelto; si no hubo, caemos a sysDescr.
+        [$brand, $parsedModel] = self::parseBrandModel($model ?: $descr);
+
+        // Si resolveModel trajo un nombre limpio de modelo, ese manda.
+        $finalModel = $model ?: $parsedModel;
+
+        // Si no detectamos la marca desde el modelo, intentar desde sysDescr.
+        if (! $brand && $descr) {
+            [$brandFromDescr] = self::parseBrandModel($descr);
+            $brand = $brandFromDescr;
+        }
 
         return [
             'brand'      => $brand,
-            'model'      => $model,
+            'model'      => $finalModel,
             'serial'     => $serial ? trim($serial) : null,
             'page_count' => $pages,
-            'snmp'       => $descr !== null || $pages !== null,
+            'snmp'       => $descr !== null || $model !== null || $pages !== null,
         ];
+    }
+
+    /**
+     * Resuelve el modelo REAL de la impresora probando OIDs en orden de preferencia.
+     *
+     * El problema: sysDescr en Brother (y otras marcas) devuelve la placa de red
+     * interna (ej. "Brother NC-7900w, Firmware Ver.1.05..."), que NO es el modelo
+     * del equipo. El modelo real (ej. "MFC-L8910CDW") vive en otros OIDs.
+     *
+     * Orden de preferencia:
+     *   1. prtGeneralPrinterName  — nombre del motor de impresión
+     *   2. hrDeviceDescr          — descripción del hardware
+     *   3. Brother (rama privada) — nombre de modelo
+     *   4. sysDescr               — último recurso, solo si no parece un print server
+     */
+    private static function resolveModel(string $ip, string $community, ?string $sysDescr): ?string
+    {
+        $candidates = [
+            self::OID_PRT_NAME,
+            self::OID_HR_DESCR_MODEL,
+            self::OID_BROTHER_MODEL,
+        ];
+
+        foreach ($candidates as $oid) {
+            $value = self::snmpGet($ip, $community, $oid);
+            if ($value && self::looksLikeModel($value)) {
+                return self::cleanModel($value);
+            }
+        }
+
+        // Último recurso: sysDescr, pero solo si no es un print server.
+        if ($sysDescr && self::looksLikeModel($sysDescr)) {
+            return self::cleanModel($sysDescr);
+        }
+
+        return null;
+    }
+
+    /**
+     * ¿El valor parece el modelo real de la máquina y no la placa de red?
+     * Descarta print servers Brother (NC-####w) y valores vacíos/genéricos.
+     */
+    private static function looksLikeModel(?string $value): bool
+    {
+        if (! $value) {
+            return false;
+        }
+
+        $value = trim($value);
+
+        if (strlen($value) < 2) {
+            return false;
+        }
+
+        // Placas de red / print servers que NO son el modelo del equipo.
+        // Brother: NC-7900w, NC-8100w, etc.  |  HP JetDirect  |  genéricos.
+        $networkCards = [
+            '/\bNC-?\d+\w*\b/i',            // Brother NC-7900w
+            '/jetdirect/i',                 // HP JetDirect
+            '/print\s*server/i',
+            '/ethernet/i',
+            '/network\s*(card|board|module)/i',
+        ];
+
+        foreach ($networkCards as $pattern) {
+            if (preg_match($pattern, $value)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Limpia el texto del modelo: quita firmware, series de placa, sufijos "series".
+     */
+    private static function cleanModel(string $value): string
+    {
+        $value = trim($value);
+
+        // Cortar todo lo que venga después de la primera coma
+        // (ej. "Brother MFC-L8910CDW, Firmware..." → "Brother MFC-L8910CDW").
+        if (str_contains($value, ',')) {
+            $value = trim(explode(',', $value, 2)[0]);
+        }
+
+        // Si viene en formato IEEE 1284 (MFG:...;MDL:...;) preferir el modelo.
+        if (preg_match('/MDL:([^;]+)/i', $value, $m)) {
+            $value = trim($m[1]);
+        }
+
+        // Quitar sufijo "series" común en Brother/HP ("MFC-L8910CDW series").
+        $value = preg_replace('/\s+series$/i', '', $value);
+
+        return trim($value);
     }
 
     /**

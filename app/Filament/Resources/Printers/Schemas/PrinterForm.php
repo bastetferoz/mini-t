@@ -47,19 +47,15 @@ class PrinterForm
 
             TextInput::make('brand')
                 ->label('Marca')
-                ->helperText('Se completa automáticamente al verificar.')
-                ->disabled()
-                ->dehydrated(false),
+                ->helperText('Se completa solo la primera vez que se verifica. Podés corregirla a mano.'),
 
             TextInput::make('model')
                 ->label('Modelo')
-                ->disabled()
-                ->dehydrated(false),
+                ->helperText('Se completa solo la primera vez que se verifica. Corregilo si el SNMP trae la placa de red en vez del modelo real.'),
 
             TextInput::make('serial')
                 ->label('Nº Serie')
-                ->disabled()
-                ->dehydrated(false),
+                ->helperText('Se completa solo la primera vez que se verifica. Podés corregirlo a mano.'),
 
             Textarea::make('notes')
                 ->label('Observaciones')
