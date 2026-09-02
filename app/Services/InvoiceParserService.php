@@ -188,6 +188,19 @@ PROMPT;
         // Prompt genérico
         $currency = $provider?->default_currency ?? 'ARS';
 
+        // Regla de "period" según el proveedor.
+        // Algunos proveedores (ej: Monday) facturan POR ADELANTADO: emiten a fin de
+        // mes un ciclo que cubre mayormente el mes siguiente. Con la regla estándar
+        // (mes de mayor servicio) esas facturas se corren un mes hacia adelante y se
+        // mezclan con las del mes siguiente. Para esos casos usamos el mes de la
+        // FECHA DE EMISIÓN como período.
+        $prepaidProviders = ['monday'];
+        $isPrepaid = $provider && in_array($provider->slug, $prepaidProviders, true);
+
+        $periodRule = $isPrepaid
+            ? '- "period": USAR SIEMPRE el mes de la fecha de emisión de la factura (invoice_date). Este proveedor factura por adelantado, así que ignorá el período de servicio/ciclo de suscripción aunque cruce meses. Ejemplo: factura emitida el 24/06/2026 → "2026-06".'
+            : '- "period": el mes al que corresponde el servicio facturado. Si el período de facturación cruza dos meses (ej: 02/06 - 01/07), usar el mes donde cae la MAYOR parte de días del servicio (en ese ejemplo, junio → "2026-06"). Si dice "Billing Period: July 2026" o "Periodo: Julio 2026", usar ese mes directamente.';
+
         return <<<PROMPT
 Extraé los datos de esta factura en formato JSON estricto (sin texto adicional, solo JSON):
 
@@ -205,7 +218,7 @@ Extraé los datos de esta factura en formato JSON estricto (sin texto adicional,
 Reglas:
 - "amount": numérico, punto como separador decimal, sin puntos de miles.
 - "currency": "ARS" para pesos argentinos, "USD" para dólares.
-- "period": el mes al que corresponde el servicio facturado. Si el período de facturación cruza dos meses (ej: 02/06 - 01/07), usar el mes donde cae la MAYOR parte de días del servicio (en ese ejemplo, junio → "2026-06"). Si dice "Billing Period: July 2026" o "Periodo: Julio 2026", usar ese mes directamente.
+{$periodRule}
 - "invoice_date": fecha de emisión de la factura (no confundir con el período de servicio).
 - "company": la empresa que PAGA/IMPUTA este gasto. Solo puede ser una de estas: "phinxlab", "novatech", "cryptopatagonia". Si la factura dice "Phinxlab", "Phinx", "Dinmax", "Velned", "Datanova", "Technology Advisors", "llanmetal", "dmxconsulting", "tradingwasp", "holapepper", "newiter" → es "phinxlab". Si dice "Nova", "Novatech", "Aganon", "nvt-usa", "palitocapital" → es "novatech". Si dice "Cryptopatagonia" → es "cryptopatagonia". Si no podés determinar, usá null.
 - "reference": info adicional como dominio facturado, número de cuenta, plan, etc.
