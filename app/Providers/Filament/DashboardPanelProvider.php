@@ -26,6 +26,7 @@ class DashboardPanelProvider extends PanelProvider
             ->id('dashboard')
             ->path('dashboard')
             ->login()
+            ->favicon(asset('images/Mini-t.png'))
             ->colors([
                 'primary' => Color::Amber,
             ])
