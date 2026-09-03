@@ -9,33 +9,32 @@ class SyncInvoicePeriods extends Command
 {
     protected $signature = 'invoices:sync-periods {--dry-run : Solo muestra los cambios sin aplicarlos}';
 
-    protected $description = 'Resincroniza month/year de las facturas con su period (YYYY-MM). Corrige facturas donde el mes del análisis no coincide con el período.';
+    protected $description = 'Resincroniza month/year de las facturas con su fecha de emisión (invoice_date). Corrige facturas donde el mes del análisis no coincide con la fecha de emisión.';
 
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
 
-        $invoices = Invoice::whereNotNull('period')->get();
+        $invoices = Invoice::all();
         $fixed = 0;
 
         foreach ($invoices as $invoice) {
-            if (! preg_match('/^(\d{4})-(\d{1,2})$/', trim($invoice->period), $m)) {
-                continue;
-            }
+            $invoiceDate = $invoice->invoice_date instanceof \DateTimeInterface
+                ? $invoice->invoice_date->format('Y-m-d')
+                : $invoice->invoice_date;
 
-            $year = (int) $m[1];
-            $month = (int) $m[2];
+            [$year, $month] = Invoice::deriveMonthYear($invoice->period, $invoiceDate);
 
             if ((int) $invoice->year === $year && (int) $invoice->month === $month) {
                 continue; // ya está sincronizada
             }
 
             $this->line(sprintf(
-                '  #%d | %s | Nº %s | period=%s | %d-%02d → %d-%02d',
+                '  #%d | %s | Nº %s | emisión=%s | %d-%02d → %d-%02d',
                 $invoice->id,
                 $invoice->provider,
                 $invoice->invoice_number ?? '—',
-                $invoice->period,
+                $invoiceDate ?? '—',
                 (int) $invoice->year,
                 (int) $invoice->month,
                 $year,
@@ -43,8 +42,6 @@ class SyncInvoicePeriods extends Command
             ));
 
             if (! $dryRun) {
-                // saveQuietly evita disparar el hook saving() (que ya haría lo mismo),
-                // pero seteamos explícito para dejar claro el intento.
                 $invoice->year = $year;
                 $invoice->month = $month;
                 $invoice->save();
@@ -54,7 +51,7 @@ class SyncInvoicePeriods extends Command
         }
 
         if ($fixed === 0) {
-            $this->info('Todas las facturas ya están sincronizadas con su período.');
+            $this->info('Todas las facturas ya están sincronizadas con su fecha de emisión.');
             return self::SUCCESS;
         }
 

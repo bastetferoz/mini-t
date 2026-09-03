@@ -46,10 +46,10 @@ class ProcessInvoiceFile implements ShouldQueue
         $provider = InvoiceParserService::normalizeProvider($parsed['provider'] ?? null);
         $period = $parsed['period'] ?? now()->format('Y-m');
 
-        // Determinar mes y año: priorizar period sobre invoice_date.
-        // El period representa el mes del servicio facturado (ej: "2026-07"),
-        // mientras que invoice_date es la fecha de emisión que puede caer en otro mes.
-        // Ejemplo: Microsoft emite el 02/08 una factura cuyo servicio es de julio.
+        // Determinar mes y año a partir de la FECHA DE EMISIÓN (invoice_date).
+        // Criterio único para todas las facturas: el mes lo fija la fecha de emisión,
+        // no el "period" que interpreta la IA (inconsistente entre facturas iguales).
+        // Si no hay fecha de emisión, se usa el period como respaldo.
         $invoiceDate = $parsed['invoice_date'] ?? null;
         [$year, $month] = Invoice::deriveMonthYear($period, $invoiceDate);
 

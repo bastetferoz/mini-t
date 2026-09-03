@@ -34,27 +34,36 @@ class Invoice extends Model
 
     protected static function booted(): void
     {
-        // Mantener month/year sincronizados con period (formato YYYY-MM).
-        // El análisis suma por month/year, así que deben reflejar siempre el período.
+        // Mantener month/year sincronizados con la FECHA DE EMISIÓN (invoice_date).
+        // Criterio único para todas las facturas: el mes lo determina la fecha de
+        // emisión, no el "period" que interpreta la IA (que es inconsistente entre
+        // facturas del mismo proveedor). El análisis suma por month/year.
+        // Si no hay invoice_date, se usa el period como respaldo.
         static::saving(function (Invoice $invoice) {
-            if ($invoice->period && preg_match('/^(\d{4})-(\d{1,2})$/', trim($invoice->period), $m)) {
-                $invoice->year = (int) $m[1];
-                $invoice->month = (int) $m[2];
-            }
+            [$year, $month] = self::deriveMonthYear(
+                $invoice->period,
+                $invoice->invoice_date instanceof \DateTimeInterface
+                    ? $invoice->invoice_date->format('Y-m-d')
+                    : $invoice->invoice_date,
+            );
+
+            $invoice->year = $year;
+            $invoice->month = $month;
         });
     }
 
     /**
-     * Deriva [año, mes] a partir del period (YYYY-MM), con fallback a invoice_date.
+     * Deriva [año, mes] priorizando la FECHA DE EMISIÓN (invoice_date).
+     * Solo cae al period (YYYY-MM) si no hay una fecha de emisión válida.
      */
     public static function deriveMonthYear(?string $period, ?string $invoiceDate): array
     {
-        if ($period && preg_match('/^(\d{4})-(\d{1,2})$/', trim($period), $m)) {
-            return [(int) $m[1], (int) $m[2]];
-        }
-
         if ($invoiceDate && preg_match('/^(\d{4})-(\d{2})-\d{2}/', $invoiceDate, $d)) {
             return [(int) $d[1], (int) $d[2]];
+        }
+
+        if ($period && preg_match('/^(\d{4})-(\d{1,2})$/', trim($period), $m)) {
+            return [(int) $m[1], (int) $m[2]];
         }
 
         return [(int) now()->year, (int) now()->month];
