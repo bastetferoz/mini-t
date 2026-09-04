@@ -156,6 +156,7 @@
                         <th class="text-left py-3 px-4 text-gray-400 font-medium">Fecha</th>
                         <th class="text-left py-3 px-4 text-gray-400 font-medium">Empresa</th>
                         <th class="text-center py-3 px-4 text-gray-400 font-medium">Archivo</th>
+                        <th class="text-center py-3 px-4 text-gray-400 font-medium">Período</th>
                         <th class="text-center py-3 px-4 text-gray-400 font-medium">Mover a</th>
                         <th class="text-center py-3 px-4 text-gray-400 font-medium w-10"></th>
                     </tr>
@@ -183,6 +184,13 @@
                                 @endif
                             </td>
                             <td class="py-3 px-4 text-center">
+                                <input type="month"
+                                    value="{{ sprintf('%04d-%02d', $invoice->year, $invoice->month) }}"
+                                    wire:change="updatePeriod({{ $invoice->id }}, $event.target.value)"
+                                    title="Mes al que se asigna la factura en el análisis"
+                                    class="text-xs rounded border-gray-600 bg-gray-800 text-gray-300 py-1 px-2 focus:border-amber-500 focus:ring-amber-500">
+                            </td>
+                            <td class="py-3 px-4 text-center">
                                 <select wire:change="reassignProvider({{ $invoice->id }}, $event.target.value)" class="text-xs rounded border-gray-600 bg-gray-800 text-gray-300 py-1 px-2 focus:border-amber-500 focus:ring-amber-500">
                                     <option value="">— Mover —</option>
                                     @foreach($this->getProviderOptions() as $slug => $name)
@@ -199,7 +207,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="11" class="py-8 text-center text-gray-500">Sin facturas en este período.</td></tr>
+                        <tr><td colspan="12" class="py-8 text-center text-gray-500">Sin facturas en este período.</td></tr>
                     @endforelse
                 </tbody>
                 @if($invoices->count() > 0)
@@ -207,7 +215,7 @@
                     <tr class="border-t border-gray-600">
                         <td class="py-3 px-4 font-semibold text-white" colspan="3">Total</td>
                         <td class="py-3 px-4 text-right font-bold text-amber-400">${{ number_format($invoices->sum('amount'), 2, ',', '.') }}</td>
-                        <td colspan="7"></td>
+                        <td colspan="8"></td>
                     </tr>
                 </tfoot>
                 @endif

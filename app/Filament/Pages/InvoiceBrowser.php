@@ -323,6 +323,50 @@ class InvoiceBrowser extends Page
     }
 
     /**
+     * Cambia manualmente el período (mes) al que se asigna una factura.
+     * Recibe un valor "YYYY-MM" (input type=month) y actualiza period + month/year.
+     * Impacta directo en el análisis, que suma por month/year.
+     * Se respeta la elección manual del usuario por sobre la heurística automática.
+     */
+    public function updatePeriod(int $invoiceId, string $period): void
+    {
+        $invoice = Invoice::find($invoiceId);
+
+        if (! $invoice) {
+            return;
+        }
+
+        if (! preg_match('/^(\d{4})-(\d{1,2})$/', trim($period), $m)) {
+            Notification::make()
+                ->title('Período inválido')
+                ->body('Usá el formato YYYY-MM (ej: 2026-03).')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $year = (int) $m[1];
+        $month = (int) $m[2];
+
+        $anterior = sprintf('%d-%02d', (int) $invoice->year, (int) $invoice->month);
+
+        $invoice->period = sprintf('%04d-%02d', $year, $month);
+        $invoice->month = $month;
+        $invoice->year = $year;
+        // saveQuietly evita que el hook saving() recalcule y pise la elección manual.
+        $invoice->saveQuietly();
+
+        $nuevo = sprintf('%d-%02d', $year, $month);
+        \App\Services\ActivityLogger::facturacion("📅 Factura #{$invoice->id} ({$invoice->provider}) reasignada de {$anterior} a {$nuevo} (manual)");
+
+        Notification::make()
+            ->title('Período actualizado')
+            ->body("La factura ahora se cuenta en {$nuevo}.")
+            ->success()
+            ->send();
+    }
+
+    /**
      * Devuelve las opciones de proveedor disponibles para el selector inline.
      */
     public function getProviderOptions(): array
