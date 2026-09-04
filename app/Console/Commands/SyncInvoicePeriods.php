@@ -23,7 +23,8 @@ class SyncInvoicePeriods extends Command
                 ? $invoice->invoice_date->format('Y-m-d')
                 : $invoice->invoice_date;
 
-            [$year, $month] = Invoice::deriveMonthYear($invoice->period, $invoiceDate);
+            $isArrears = Invoice::providerIsArrears($invoice->provider);
+            [$year, $month] = Invoice::deriveMonthYear($invoice->period, $invoiceDate, $isArrears);
 
             if ((int) $invoice->year === $year && (int) $invoice->month === $month) {
                 continue; // ya está sincronizada

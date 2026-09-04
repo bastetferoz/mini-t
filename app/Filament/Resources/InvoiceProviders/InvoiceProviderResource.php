@@ -103,6 +103,11 @@ class InvoiceProviderResource extends Resource
                 ->label('Multi-factura')
                 ->default(false)
                 ->helperText('Activar si este proveedor puede tener varias facturas en el mismo mes (ej: Google con múltiples dominios, Microsoft con distintos planes).'),
+
+            Toggle::make('is_arrears')
+                ->label('Mes vencido')
+                ->default(false)
+                ->helperText('Activar si factura a mes vencido: emite a principio de mes la factura del servicio del mes anterior (ej: Microsoft emite el 02/08 el servicio de julio). En ese caso la factura se cuenta en el mes anterior a la emisión.'),
         ]);
     }
 
@@ -146,6 +151,10 @@ class InvoiceProviderResource extends Resource
                     ->formatStateUsing(fn ($state) => $state ? '✓ Custom' : 'Genérico')
                     ->badge()
                     ->color(fn ($state) => $state ? 'success' : 'gray'),
+
+                IconColumn::make('is_arrears')
+                    ->label('Mes vencido')
+                    ->boolean(),
 
                 IconColumn::make('is_active')
                     ->label('Activo')

@@ -35,16 +35,19 @@ class Invoice extends Model
     protected static function booted(): void
     {
         // Mantener month/year sincronizados con la FECHA DE EMISIÓN (invoice_date).
-        // Criterio único para todas las facturas: el mes lo determina la fecha de
-        // emisión, no el "period" que interpreta la IA (que es inconsistente entre
-        // facturas del mismo proveedor). El análisis suma por month/year.
-        // Si no hay invoice_date, se usa el period como respaldo.
+        // El mes lo determina la fecha de emisión, no el "period" que interpreta la IA.
+        // Excepción: si el proveedor factura a MES VENCIDO (is_arrears), se cuenta en
+        // el mes anterior a la emisión (ej: Microsoft emite el 02/08 el servicio de julio).
+        // El análisis suma por month/year. Si no hay invoice_date, se usa el period.
         static::saving(function (Invoice $invoice) {
+            $isArrears = self::providerIsArrears($invoice->provider);
+
             [$year, $month] = self::deriveMonthYear(
                 $invoice->period,
                 $invoice->invoice_date instanceof \DateTimeInterface
                     ? $invoice->invoice_date->format('Y-m-d')
                     : $invoice->invoice_date,
+                $isArrears,
             );
 
             $invoice->year = $year;
@@ -53,13 +56,36 @@ class Invoice extends Model
     }
 
     /**
+     * ¿El proveedor (por slug) factura a mes vencido?
+     */
+    public static function providerIsArrears(?string $providerSlug): bool
+    {
+        if (blank($providerSlug)) {
+            return false;
+        }
+
+        return (bool) InvoiceProvider::where('slug', $providerSlug)
+            ->value('is_arrears');
+    }
+
+    /**
      * Deriva [año, mes] priorizando la FECHA DE EMISIÓN (invoice_date).
+     * Si $isArrears es true, resta un mes (proveedor que factura a mes vencido).
      * Solo cae al period (YYYY-MM) si no hay una fecha de emisión válida.
      */
-    public static function deriveMonthYear(?string $period, ?string $invoiceDate): array
+    public static function deriveMonthYear(?string $period, ?string $invoiceDate, bool $isArrears = false): array
     {
         if ($invoiceDate && preg_match('/^(\d{4})-(\d{2})-\d{2}/', $invoiceDate, $d)) {
-            return [(int) $d[1], (int) $d[2]];
+            $year = (int) $d[1];
+            $month = (int) $d[2];
+
+            if ($isArrears) {
+                // Restar un mes: el servicio corresponde al mes anterior a la emisión.
+                $date = \Carbon\Carbon::create($year, $month, 1)->subMonth();
+                return [(int) $date->year, (int) $date->month];
+            }
+
+            return [$year, $month];
         }
 
         if ($period && preg_match('/^(\d{4})-(\d{1,2})$/', trim($period), $m)) {
