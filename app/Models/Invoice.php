@@ -53,17 +53,49 @@ class Invoice extends Model
     }
 
     /**
+     * Máxima diferencia (en meses) tolerada entre el period y la fecha de emisión.
+     * Si el period se aleja más que esto de la emisión, se considera que la IA lo
+     * leyó mal y se usa la fecha de emisión en su lugar.
+     */
+    public const MAX_PERIOD_DRIFT_MONTHS = 2;
+
+    /**
      * Deriva [año, mes] priorizando el PERÍODO DE SERVICIO (period, YYYY-MM).
-     * Solo cae a la fecha de emisión (invoice_date) si no hay un period válido.
+     * Validación: si el period difiere de la fecha de emisión en más de
+     * MAX_PERIOD_DRIFT_MONTHS meses, se descarta el period (probable error de la IA)
+     * y se usa la fecha de emisión. Si no hay period válido, también cae a la emisión.
      */
     public static function deriveMonthYear(?string $period, ?string $invoiceDate): array
     {
+        $periodYm = null;
         if ($period && preg_match('/^(\d{4})-(\d{1,2})$/', trim($period), $m)) {
-            return [(int) $m[1], (int) $m[2]];
+            $periodYm = [(int) $m[1], (int) $m[2]];
         }
 
+        $emisionYm = null;
         if ($invoiceDate && preg_match('/^(\d{4})-(\d{2})-\d{2}/', $invoiceDate, $d)) {
-            return [(int) $d[1], (int) $d[2]];
+            $emisionYm = [(int) $d[1], (int) $d[2]];
+        }
+
+        // Con ambos datos: usar el period salvo que se aleje demasiado de la emisión.
+        if ($periodYm && $emisionYm) {
+            $driftMeses = abs(
+                (($periodYm[0] * 12) + $periodYm[1]) - (($emisionYm[0] * 12) + $emisionYm[1])
+            );
+
+            if ($driftMeses > self::MAX_PERIOD_DRIFT_MONTHS) {
+                return $emisionYm; // period sospechoso → gana la fecha de emisión
+            }
+
+            return $periodYm;
+        }
+
+        if ($periodYm) {
+            return $periodYm;
+        }
+
+        if ($emisionYm) {
+            return $emisionYm;
         }
 
         return [(int) now()->year, (int) now()->month];
