@@ -211,6 +211,16 @@ class MailIngestService
             return false;
         }
 
+        // ─── DEDUPLICACIÓN ANTES DE LA IA ───
+        // Calcular el hash del contenido y, si este adjunto ya se procesó antes,
+        // descartarlo SIN llamar a la IA (ahorra tokens en correos repetidos).
+        $hash = hash('sha256', $content);
+
+        if (\App\Models\IngestedAttachment::alreadyProcessed($hash)) {
+            ActivityLogger::facturacion("⏭️ Mail Ingest: adjunto ya procesado, omitido sin IA ({$filename})");
+            return null;
+        }
+
         // Guardar en temp
         $tempPath = 'invoices/temp/' . uniqid('mail_') . '_' . $filename;
         Storage::disk('public')->put($tempPath, $content);
@@ -234,6 +244,11 @@ class MailIngestService
 
             if ($exists) {
                 ActivityLogger::facturacion("⚠️ Mail Ingest: duplicada omitida {$provider} Nº {$invoiceNumber}");
+                // Registrar el hash para no volver a analizarla con IA en el futuro.
+                \App\Models\IngestedAttachment::firstOrCreate(
+                    ['hash' => $hash],
+                    ['filename' => $filename, 'provider' => $provider, 'invoice_number' => $invoiceNumber]
+                );
                 Storage::disk('public')->delete($tempPath);
                 return null;
             }
@@ -270,6 +285,17 @@ class MailIngestService
         } elseif ($invoice->currency === 'USD') {
             $invoice->update(['exchange_rate' => 1, 'amount_usd' => $invoice->amount]);
         }
+
+        // Registrar el hash del adjunto para no reprocesarlo con IA en el futuro.
+        \App\Models\IngestedAttachment::firstOrCreate(
+            ['hash' => $hash],
+            [
+                'filename' => $filename,
+                'provider' => $provider,
+                'invoice_number' => $invoiceNumber,
+                'invoice_id' => $invoice->id,
+            ]
+        );
 
         ActivityLogger::facturacion("✓ Mail Ingest: {$provider} | \${$parsed['amount']} | {$period} (desde email)", $invoice);
 
