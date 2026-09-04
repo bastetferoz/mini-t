@@ -9,7 +9,7 @@ class SyncInvoicePeriods extends Command
 {
     protected $signature = 'invoices:sync-periods {--dry-run : Solo muestra los cambios sin aplicarlos}';
 
-    protected $description = 'Resincroniza month/year de las facturas con su fecha de emisión (invoice_date). Corrige facturas donde el mes del análisis no coincide con la fecha de emisión.';
+    protected $description = 'Resincroniza month/year de las facturas según su período de servicio (period) o, si no hay, su fecha de emisión. Corrige facturas mal ubicadas en el análisis.';
 
     public function handle(): int
     {
@@ -23,18 +23,18 @@ class SyncInvoicePeriods extends Command
                 ? $invoice->invoice_date->format('Y-m-d')
                 : $invoice->invoice_date;
 
-            $isArrears = Invoice::providerIsArrears($invoice->provider);
-            [$year, $month] = Invoice::deriveMonthYear($invoice->period, $invoiceDate, $isArrears);
+            [$year, $month] = Invoice::deriveMonthYear($invoice->period, $invoiceDate);
 
             if ((int) $invoice->year === $year && (int) $invoice->month === $month) {
                 continue; // ya está sincronizada
             }
 
             $this->line(sprintf(
-                '  #%d | %s | Nº %s | emisión=%s | %d-%02d → %d-%02d',
+                '  #%d | %s | Nº %s | period=%s emisión=%s | %d-%02d → %d-%02d',
                 $invoice->id,
                 $invoice->provider,
                 $invoice->invoice_number ?? '—',
+                $invoice->period ?? '—',
                 $invoiceDate ?? '—',
                 (int) $invoice->year,
                 (int) $invoice->month,
@@ -52,7 +52,7 @@ class SyncInvoicePeriods extends Command
         }
 
         if ($fixed === 0) {
-            $this->info('Todas las facturas ya están sincronizadas con su fecha de emisión.');
+            $this->info('Todas las facturas ya están sincronizadas con su período.');
             return self::SUCCESS;
         }
 

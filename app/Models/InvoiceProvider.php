@@ -16,14 +16,12 @@ class InvoiceProvider extends Model
         'custom_prompt',
         'is_active',
         'is_multi',
-        'is_arrears',
     ];
 
     protected $casts = [
         'detection_keywords' => 'array',
         'is_active' => 'boolean',
         'is_multi' => 'boolean',
-        'is_arrears' => 'boolean',
     ];
 
     /**

@@ -46,13 +46,10 @@ class ProcessInvoiceFile implements ShouldQueue
         $provider = InvoiceParserService::normalizeProvider($parsed['provider'] ?? null);
         $period = $parsed['period'] ?? now()->format('Y-m');
 
-        // Determinar mes y año a partir de la FECHA DE EMISIÓN (invoice_date).
-        // El mes lo fija la fecha de emisión, salvo proveedores a mes vencido
-        // (is_arrears), que se cuentan en el mes anterior a la emisión.
-        // Si no hay fecha de emisión, se usa el period como respaldo.
+        // Determinar mes y año. Se prioriza el PERÍODO DE SERVICIO que declara la
+        // factura (period), y si no hay uno válido se usa la fecha de emisión.
         $invoiceDate = $parsed['invoice_date'] ?? null;
-        $isArrears = Invoice::providerIsArrears($provider);
-        [$year, $month] = Invoice::deriveMonthYear($period, $invoiceDate, $isArrears);
+        [$year, $month] = Invoice::deriveMonthYear($period, $invoiceDate);
 
         // Verificar duplicado por número de factura
         $invoiceNumber = $parsed['invoice_number'] ?? null;
