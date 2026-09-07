@@ -269,7 +269,7 @@ class InvoiceBrowser extends Page
 
                 foreach ($files as $filePath) {
                     \App\Jobs\ProcessInvoiceFile::dispatch($filePath)
-                        ->delay(now()->addSeconds($queued * 5)); // 5s entre cada una
+                        ->delay(now()->addSeconds($queued * 20)); // 20s entre cada una para no saturar la IA
                     $queued++;
                 }
 

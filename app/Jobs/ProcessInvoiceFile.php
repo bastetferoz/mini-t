@@ -15,9 +15,13 @@ class ProcessInvoiceFile implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 2;
-    public int $backoff = 15;
+    // Muchos reintentos: los límites de Gemini (429/503) son temporales,
+    // así que preferimos esperar y reintentar antes que perder la factura.
+    public int $tries = 8;
     public int $timeout = 120;
+
+    // Cuánto esperar (segundos) antes de reintentar tras un límite/saturación de IA.
+    private const AI_RETRY_DELAY = 60;
 
     public function __construct(
         public string $filePath,
@@ -38,6 +42,25 @@ class ProcessInvoiceFile implements ShouldQueue
 
         if (! $parsed) {
             $error = InvoiceParserService::$lastError ?? 'Error desconocido';
+
+            // ¿Es un límite/saturación temporal de la IA? (429 rate limit, 5xx del servidor)
+            // En ese caso NO perdemos la factura: reencolamos el job con espera para
+            // reintentar más tarde. Así, aunque entren muchas de golpe, todas terminan
+            // procesándose sin que Gemini se queje de forma terminal.
+            $esLimiteTemporal = (bool) preg_match('/\b(429|500|502|503|504)\b/', $error)
+                || stripos($error, 'quota') !== false
+                || stripos($error, 'rate') !== false
+                || stripos($error, 'timed out') !== false
+                || stripos($error, 'overloaded') !== false
+                || stripos($error, 'unavailable') !== false;
+
+            if ($esLimiteTemporal && $this->attempts() < $this->tries) {
+                Log::warning("ProcessInvoiceFile: Límite temporal de IA en {$this->filePath} (intento {$this->attempts()}/{$this->tries}). Reintentando en " . self::AI_RETRY_DELAY . "s. Error: {$error}");
+                // Reencolar este mismo job con espera; no cuenta como fallo definitivo.
+                $this->release(self::AI_RETRY_DELAY);
+                return;
+            }
+
             Log::error("ProcessInvoiceFile: Error al analizar {$this->filePath}: {$error}");
             ActivityLogger::facturacion("❌ Cola: Error al cargar factura: " . basename($this->filePath) . " - {$error}");
             return;
