@@ -32,6 +32,7 @@ class MailTemplateForm
                     'offboarding_completed' => 'Baja de empleado',
                     'pending_assets_report' => 'Reporte de equipos pendientes',
                     'shipment_delivered'    => 'Envío entregado',
+                    'conciliation'          => 'Conciliación de consumos',
                 ])
                 ->searchable()
                 ->preload()
@@ -69,6 +70,7 @@ class MailTemplateForm
                     . collect(match ($get('code')) {
                         'pending_assets_report' => ['pending_count' => 'Cant. pendientes', 'pending_list' => 'Lista equipos', 'date' => 'Fecha'],
                         'shipment_delivered' => ['person_name' => 'Nombre', 'tracking_number' => 'Nº seguimiento', 'carrier' => 'Transportista', 'date' => 'Fecha'],
+                        'conciliation' => ['person_name' => 'Nombre', 'period' => 'Período', 'green' => 'Con factura', 'yellow' => 'Reconocidos', 'red' => 'Sin factura', 'total' => 'Total', 'date' => 'Fecha'],
                         'asset_assignment' => ['person_name' => 'Nombre', 'asset' => 'Equipo', 'date' => 'Fecha'],
                         'asset_replacement' => ['person_name' => 'Nombre', 'old_asset' => 'Equipo anterior', 'new_asset' => 'Equipo nuevo', 'reason' => 'Motivo', 'date' => 'Fecha'],
                         'asset_return' => ['person_name' => 'Nombre', 'asset' => 'Equipo', 'date' => 'Fecha'],

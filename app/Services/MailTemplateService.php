@@ -8,7 +8,10 @@ use Illuminate\Support\Facades\Mail;
 
 class MailTemplateService
 {
-    public static function send(string $code, array $variables = [], ?string $toEmail = null): bool
+    /**
+     * @param array $attachments  Lista de adjuntos: ['data' => contenido, 'name' => nombre, 'mime' => tipo]
+     */
+    public static function send(string $code, array $variables = [], ?string $toEmail = null, array $attachments = []): bool
     {
         try {
             $template = MailTemplate::where('code', $code)
@@ -69,7 +72,7 @@ class MailTemplateService
                 'mail.from.name'               => $smtp->from_name,
             ]);
 
-            Mail::html($body, function ($message) use ($email, $subject, $smtp, $template) {
+            Mail::html($body, function ($message) use ($email, $subject, $smtp, $template, $attachments) {
                 $message->to($email)
                     ->subject($subject);
 
@@ -88,6 +91,17 @@ class MailTemplateService
 
                 if (! empty($ccList)) {
                     $message->cc($ccList);
+                }
+
+                // Adjuntos (ej: PDF de la conciliación)
+                foreach ($attachments as $att) {
+                    if (! empty($att['data']) && ! empty($att['name'])) {
+                        $message->attachData(
+                            $att['data'],
+                            $att['name'],
+                            ['mime' => $att['mime'] ?? 'application/pdf']
+                        );
+                    }
                 }
             });
 

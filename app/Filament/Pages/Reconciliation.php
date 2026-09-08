@@ -35,13 +35,26 @@ class Reconciliation extends Page implements HasForms
     /** Texto del resumen pegado manualmente (alternativa a subir el PDF). */
     public string $pastedText = '';
 
+    /** Mes y año de la conciliación (para guardar). */
+    public ?int $month = null;
+    public ?int $year = null;
+
     /**
-     * Resultado de la última conciliación.
-     * Cada item: ['description' => ..., 'amount' => ..., 'currency' => ..., 'matched' => bool, 'invoice' => ...]
+     * Resultado de la conciliación actual. Cada item:
+     * ['description', 'amount', 'currency', 'status' (green|yellow|red), 'invoice_info']
      */
     public array $results = [];
 
     public bool $analyzed = false;
+
+    /** Id de la conciliación guardada que se está viendo (null = nueva). */
+    public ?int $currentId = null;
+
+    public function mount(): void
+    {
+        $this->month = (int) now()->month;
+        $this->year = (int) now()->year;
+    }
 
     public static function canAccess(): bool
     {
@@ -235,23 +248,23 @@ class Reconciliation extends Page implements HasForms
             $match = $this->findMatch($desc, $amount, $facturas);
 
             $results[] = [
-                'description' => $desc,
-                'amount'      => $amount,
-                'currency'    => $currency,
-                'matched'     => $match !== null,
-                'invoice'     => $match ? [
-                    'provider' => $match->provider,
-                    'amount'   => $match->amount,
-                    'currency' => $match->currency,
-                    'number'   => $match->invoice_number,
-                ] : null,
+                'description'  => $desc,
+                'amount'       => $amount,
+                'currency'     => $currency,
+                // green si matcheó factura; si no, red (el usuario puede pasar a yellow)
+                'status'       => $match ? 'green' : 'red',
+                'invoice_info' => $match
+                    ? ucfirst($match->provider) . ' · ' . number_format((float) $match->amount, 2, ',', '.') . ' ' . $match->currency
+                        . ($match->invoice_number ? ' · Nº ' . $match->invoice_number : '')
+                    : null,
             ];
         }
 
         $this->results = $results;
         $this->analyzed = true;
+        $this->currentId = null; // es una conciliación nueva sin guardar
 
-        $reconocidos = collect($results)->where('matched', true)->count();
+        $reconocidos = collect($results)->where('status', 'green')->count();
 
         Notification::make()
             ->title('Conciliación completada')
@@ -260,6 +273,114 @@ class Reconciliation extends Page implements HasForms
             ->send();
 
         \App\Services\ActivityLogger::facturacion("🧾 Conciliación: {$reconocidos}/" . count($results) . " consumos con factura");
+    }
+
+    /** Cambia el estado de un item (green|yellow|red). */
+    public function setStatus(int $index, string $status): void
+    {
+        if (isset($this->results[$index]) && in_array($status, ['green', 'yellow', 'red'], true)) {
+            $this->results[$index]['status'] = $status;
+        }
+    }
+
+    /** Cicla el estado de un item con un clic: red → yellow → green → red. */
+    public function cycleStatus(int $index): void
+    {
+        if (! isset($this->results[$index])) {
+            return;
+        }
+
+        $this->results[$index]['status'] = match ($this->results[$index]['status']) {
+            'red'    => 'yellow',
+            'yellow' => 'green',
+            default  => 'red', // green → red
+        };
+    }
+
+    /** Elimina un item de la lista. */
+    public function removeItem(int $index): void
+    {
+        if (isset($this->results[$index])) {
+            array_splice($this->results, $index, 1);
+        }
+    }
+
+    /** Guarda (o actualiza) la conciliación del mes/persona. */
+    public function save(): void
+    {
+        if (empty($this->results)) {
+            Notification::make()->title('No hay nada para guardar')->warning()->send();
+            return;
+        }
+
+        $person = trim($this->targetName) ?: 'Sin nombre';
+        $month = (int) ($this->month ?: now()->month);
+        $year = (int) ($this->year ?: now()->year);
+
+        // Una conciliación por persona + mes + año: se reemplaza si ya existe.
+        $rec = \App\Models\Reconciliation::updateOrCreate(
+            ['person_name' => $person, 'month' => $month, 'year' => $year],
+            ['created_by' => auth()->id()],
+        );
+
+        // Reemplazar los items
+        $rec->items()->delete();
+        foreach ($this->results as $r) {
+            $rec->items()->create([
+                'description'  => $r['description'],
+                'amount'       => $r['amount'],
+                'currency'     => $r['currency'],
+                'status'       => $r['status'],
+                'invoice_info' => $r['invoice_info'] ?? null,
+            ]);
+        }
+
+        $this->currentId = $rec->id;
+
+        Notification::make()
+            ->title('Conciliación guardada')
+            ->body("{$person} · " . str_pad((string) $month, 2, '0', STR_PAD_LEFT) . "/{$year}")
+            ->success()
+            ->send();
+
+        \App\Services\ActivityLogger::facturacion("💾 Conciliación guardada: {$person} {$month}/{$year} (" . count($this->results) . " items)");
+    }
+
+    /** Conciliaciones guardadas (para el selector de reapertura). */
+    public function getSaved(): \Illuminate\Support\Collection
+    {
+        return \App\Models\Reconciliation::orderByDesc('year')
+            ->orderByDesc('month')
+            ->orderBy('person_name')
+            ->get();
+    }
+
+    /** Reabre una conciliación guardada. */
+    public function load(int $id): void
+    {
+        $rec = \App\Models\Reconciliation::with('items')->find($id);
+
+        if (! $rec) {
+            Notification::make()->title('No se encontró la conciliación')->danger()->send();
+            return;
+        }
+
+        $this->targetName = $rec->person_name;
+        $this->month = $rec->month;
+        $this->year = $rec->year;
+        $this->currentId = $rec->id;
+
+        $this->results = $rec->items->map(fn ($it) => [
+            'description'  => $it->description,
+            'amount'       => (float) $it->amount,
+            'currency'     => $it->currency,
+            'status'       => $it->status,
+            'invoice_info' => $it->invoice_info,
+        ])->values()->all();
+
+        $this->analyzed = true;
+
+        Notification::make()->title('Conciliación cargada')->success()->send();
     }
 
     /**
@@ -309,5 +430,92 @@ class Reconciliation extends Page implements HasForms
         $this->analyzed = false;
         $this->data = [];
         $this->pastedText = '';
+        $this->currentId = null;
+    }
+
+    /** Datos comunes para el PDF/correo. */
+    private function pdfData(): array
+    {
+        $meses = [1=>'Enero',2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre',12=>'Diciembre'];
+
+        return [
+            'person'   => trim($this->targetName) ?: 'Sin nombre',
+            'mesLabel' => ($meses[(int) $this->month] ?? $this->month) . ' ' . $this->year,
+            'results'  => $this->results,
+            'green'    => collect($this->results)->where('status', 'green')->count(),
+            'yellow'   => collect($this->results)->where('status', 'yellow')->count(),
+            'red'      => collect($this->results)->where('status', 'red')->count(),
+            'total'    => count($this->results),
+            'fecha'    => now()->format('d/m/Y H:i'),
+        ];
+    }
+
+    private function pdfFilename(): string
+    {
+        return 'conciliacion-' . \Illuminate\Support\Str::slug(trim($this->targetName) ?: 'sin-nombre')
+            . '-' . $this->year . str_pad((string) $this->month, 2, '0', STR_PAD_LEFT) . '.pdf';
+    }
+
+    /** Exporta la conciliación actual a PDF con una estructura similar a la pantalla. */
+    public function exportPdf()
+    {
+        if (empty($this->results)) {
+            Notification::make()->title('No hay nada para exportar')->warning()->send();
+            return;
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.reconciliation', $this->pdfData());
+
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            $this->pdfFilename(),
+        );
+    }
+
+    /** Envía la conciliación por correo usando la plantilla 'conciliation', con el PDF adjunto. */
+    public function sendEmail(): void
+    {
+        if (empty($this->results)) {
+            Notification::make()->title('No hay nada para enviar')->warning()->send();
+            return;
+        }
+
+        $data = $this->pdfData();
+
+        // Generar el PDF para adjuntar
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.reconciliation', $data);
+
+        $variables = [
+            'person_name' => $data['person'],
+            'period'      => $data['mesLabel'],
+            'green'       => (string) $data['green'],
+            'yellow'      => (string) $data['yellow'],
+            'red'         => (string) $data['red'],
+            'total'       => (string) $data['total'],
+            'date'        => now()->format('d/m/Y'),
+        ];
+
+        $ok = \App\Services\MailTemplateService::send('conciliation', $variables, null, [
+            [
+                'data' => $pdf->output(),
+                'name' => $this->pdfFilename(),
+                'mime' => 'application/pdf',
+            ],
+        ]);
+
+        if ($ok) {
+            Notification::make()
+                ->title('Correo enviado')
+                ->body('La conciliación se envió con el PDF adjunto.')
+                ->success()
+                ->send();
+            \App\Services\ActivityLogger::facturacion("📧 Conciliación enviada por correo: {$data['person']} · {$data['mesLabel']}");
+        } else {
+            Notification::make()
+                ->title('No se pudo enviar')
+                ->body('Revisá que exista una plantilla activa de tipo "Conciliación de consumos" (Administración → Plantillas de correo) y un perfil SMTP configurado.')
+                ->danger()
+                ->send();
+        }
     }
 }
