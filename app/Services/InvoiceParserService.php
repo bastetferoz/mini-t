@@ -82,6 +82,147 @@ class InvoiceParserService
     }
 
     /**
+     * Lee un RESUMEN DE TARJETA (o listado de consumos) y devuelve la lista de
+     * consumos que contiene. Cada consumo: descripción/comercio y monto.
+     * Se usa en la Conciliación: NO crea facturas, solo extrae la lista para
+     * cruzarla contra las facturas ya cargadas.
+     *
+     * @return array|null  ['items' => [ ['description' => ..., 'amount' => float, 'currency' => ...], ... ]]
+     */
+    public static function parseStatement(string $filePath, ?string $targetName = null): ?array
+    {
+        self::$lastError = null;
+
+        $profile = AiProfile::getDefault();
+        if (! $profile) {
+            self::$lastError = 'No hay perfil de IA predeterminado configurado. Andá a Administración → IA.';
+            return null;
+        }
+
+        $fullPath = Storage::disk('public')->path($filePath);
+        if (! file_exists($fullPath)) {
+            self::$lastError = "Archivo no encontrado: {$fullPath}";
+            return null;
+        }
+
+        $mimeType = mime_content_type($fullPath) ?: 'image/jpeg';
+
+        if ($mimeType === 'application/pdf') {
+            $firstPageImage = self::extractFirstPageFromPdf($fullPath);
+            if ($firstPageImage) {
+                $base64 = base64_encode($firstPageImage['data']);
+                $mimeType = $firstPageImage['mime'];
+            } else {
+                $base64 = base64_encode(file_get_contents($fullPath));
+            }
+        } else {
+            $base64 = base64_encode(file_get_contents($fullPath));
+        }
+
+        if ($targetName) {
+            $nombre = strtoupper(trim($targetName));
+            $prompt = <<<PROMPT
+Esta imagen es un RESUMEN DE TARJETA agrupado por persona. Cada bloque de consumos de una persona TERMINA con una línea del tipo "<total> Total Consumos de <NOMBRE>".
+
+Extraé ÚNICAMENTE los consumos que pertenecen a "{$nombre}". Sus consumos son las líneas que están JUSTO POR ENCIMA de la línea "Total Consumos de {$nombre}", y POR DEBAJO de la línea "Total Consumos de ..." de la persona anterior (o del inicio del listado si no hay persona anterior).
+
+NO incluyas consumos de otras personas. NO incluyas las líneas "Total Consumos de ...".
+
+Respondé SOLO con un JSON estricto, sin texto adicional, con esta forma exacta:
+
+{
+  "items": [
+    { "description": "nombre del comercio o servicio tal como aparece", "amount": 12345.67, "currency": "ARS" }
+  ]
+}
+
+Reglas:
+- Una entrada por cada consumo de {$nombre}.
+- "description": el comercio/servicio como figura en el resumen.
+- "amount": número, punto como separador decimal, sin separador de miles.
+- "currency": "ARS" o "USD"; si no se distingue, usá "ARS".
+- Si {$nombre} no aparece o no tiene consumos, devolvé {"items": []}.
+PROMPT;
+        } else {
+            $prompt = <<<PROMPT
+Esta imagen es un RESUMEN DE TARJETA o listado de consumos. Extraé TODOS los consumos/movimientos que aparezcan.
+
+Respondé SOLO con un JSON estricto, sin texto adicional, con esta forma exacta:
+
+{
+  "items": [
+    { "description": "nombre del comercio o servicio tal como aparece (ej: GOOGLE, GODADDY, MICROSOFT)", "amount": 12345.67, "currency": "ARS" }
+  ]
+}
+
+Reglas:
+- Incluí una entrada por cada consumo/línea del resumen.
+- "description": el nombre del comercio/servicio como figura en el resumen.
+- "amount": número, punto como separador decimal, sin separador de miles.
+- "currency": "ARS" o "USD" según corresponda; si no se distingue, usá "ARS".
+- No inventes consumos. Si no hay ninguno, devolvé {"items": []}.
+PROMPT;
+        }
+
+        $text = self::callAiRaw($profile, $base64, $mimeType, $prompt);
+
+        // Reintento simple ante límite temporal
+        if (! $text && self::$lastError && str_contains(self::$lastError, '429')) {
+            sleep(10);
+            self::$lastError = null;
+            $text = self::callAiRaw($profile, $base64, $mimeType, $prompt);
+        }
+
+        if (! $text) {
+            return null;
+        }
+
+        // Intento normal
+        $data = self::extractJson($text);
+
+        // Si el JSON vino truncado (respuesta larga cortada por límite de tokens),
+        // recuperar los items completos que sí llegaron.
+        if (! is_array($data) || ! isset($data['items']) || ! is_array($data['items'])) {
+            $items = self::recoverStatementItems($text);
+            if (! empty($items)) {
+                self::$lastError = null;
+                return ['items' => $items];
+            }
+
+            self::$lastError = 'La IA no devolvió una lista de consumos válida.';
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Rescata los objetos { "description": ..., "amount": ..., "currency": ... }
+     * completos de un texto aunque el JSON global esté truncado/incompleto.
+     */
+    private static function recoverStatementItems(string $text): array
+    {
+        $items = [];
+
+        // Buscar cada objeto que tenga al menos description y amount.
+        if (preg_match_all('/\{[^{}]*"description"\s*:\s*"([^"]*)"[^{}]*"amount"\s*:\s*([0-9.]+)[^{}]*\}/i', $text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $currency = 'ARS';
+                if (preg_match('/"currency"\s*:\s*"([^"]+)"/i', $m[0], $cm)) {
+                    $currency = strtoupper(trim($cm[1]));
+                }
+                $items[] = [
+                    'description' => trim($m[1]),
+                    'amount'      => (float) $m[2],
+                    'currency'    => $currency,
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
      * ETAPA 1: Identifica el proveedor con un prompt corto.
      */
     private static function identifyProvider(AiProfile $profile, string $base64, string $mimeType): ?string
@@ -264,7 +405,7 @@ PROMPT;
                         ],
                     ],
                 ],
-                'max_tokens' => 1000,
+                'max_tokens' => 4000,
                 'temperature' => 0.1,
             ]);
 
@@ -303,7 +444,7 @@ PROMPT;
                 ],
                 'generationConfig' => [
                     'temperature' => 0.1,
-                    'maxOutputTokens' => 1000,
+                    'maxOutputTokens' => 4000,
                 ],
             ]);
 
@@ -332,7 +473,7 @@ PROMPT;
                 'content-type' => 'application/json',
             ])->timeout(60)->post($endpoint, [
                 'model' => $profile->model,
-                'max_tokens' => 1000,
+                'max_tokens' => 4000,
                 'messages' => [
                     [
                         'role' => 'user',
