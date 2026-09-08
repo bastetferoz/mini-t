@@ -107,16 +107,17 @@ class InvoiceParserService
 
         $mimeType = mime_content_type($fullPath) ?: 'image/jpeg';
 
+        // Un resumen de tarjeta puede tener VARIAS páginas. Convertimos todas a
+        // imágenes y procesamos cada una, juntando los consumos de todas.
+        $paginas = [];
         if ($mimeType === 'application/pdf') {
-            $firstPageImage = self::extractFirstPageFromPdf($fullPath);
-            if ($firstPageImage) {
-                $base64 = base64_encode($firstPageImage['data']);
-                $mimeType = $firstPageImage['mime'];
-            } else {
-                $base64 = base64_encode(file_get_contents($fullPath));
+            $paginas = self::extractAllPagesFromPdf($fullPath);
+            if (empty($paginas)) {
+                // Fallback: mandar el PDF completo tal cual (una sola "página").
+                $paginas[] = ['data' => base64_encode(file_get_contents($fullPath)), 'mime' => 'application/pdf'];
             }
         } else {
-            $base64 = base64_encode(file_get_contents($fullPath));
+            $paginas[] = ['data' => base64_encode(file_get_contents($fullPath)), 'mime' => $mimeType];
         }
 
         if ($targetName) {
@@ -164,36 +165,57 @@ Reglas:
 PROMPT;
         }
 
-        $text = self::callAiRaw($profile, $base64, $mimeType, $prompt);
+        // Procesar cada página del resumen y juntar los consumos de todas.
+        $allItems = [];
+        $algunaOk = false;
 
-        // Reintento simple ante límite temporal
-        if (! $text && self::$lastError && str_contains(self::$lastError, '429')) {
-            sleep(10);
-            self::$lastError = null;
-            $text = self::callAiRaw($profile, $base64, $mimeType, $prompt);
-        }
+        foreach ($paginas as $idx => $pagina) {
+            $text = self::callAiRaw($profile, $pagina['data'], $pagina['mime'], $prompt);
 
-        if (! $text) {
-            return null;
-        }
-
-        // Intento normal
-        $data = self::extractJson($text);
-
-        // Si el JSON vino truncado (respuesta larga cortada por límite de tokens),
-        // recuperar los items completos que sí llegaron.
-        if (! is_array($data) || ! isset($data['items']) || ! is_array($data['items'])) {
-            $items = self::recoverStatementItems($text);
-            if (! empty($items)) {
+            // Reintento simple ante límite temporal (429/503)
+            if (! $text && self::$lastError && preg_match('/\b(429|503)\b/', self::$lastError)) {
+                sleep(10);
                 self::$lastError = null;
-                return ['items' => $items];
+                $text = self::callAiRaw($profile, $pagina['data'], $pagina['mime'], $prompt);
             }
 
-            self::$lastError = 'La IA no devolvió una lista de consumos válida.';
+            if (! $text) {
+                \Log::warning("InvoiceParser: statement página " . ($idx + 1) . " sin respuesta: " . (self::$lastError ?? '')); 
+                continue;
+            }
+
+            $data = self::extractJson($text);
+
+            if (is_array($data) && isset($data['items']) && is_array($data['items'])) {
+                $items = $data['items'];
+            } else {
+                // JSON truncado: recuperar los items completos que llegaron.
+                $items = self::recoverStatementItems($text);
+            }
+
+            if (! empty($items)) {
+                $algunaOk = true;
+                foreach ($items as $it) {
+                    if (! empty($it['description'])) {
+                        $allItems[] = [
+                            'description' => trim($it['description']),
+                            'amount'      => (float) ($it['amount'] ?? 0),
+                            'currency'    => strtoupper($it['currency'] ?? 'ARS'),
+                        ];
+                    }
+                }
+            }
+        }
+
+        if (! $algunaOk && empty($allItems)) {
+            if (! self::$lastError) {
+                self::$lastError = 'La IA no devolvió una lista de consumos válida.';
+            }
             return null;
         }
 
-        return $data;
+        self::$lastError = null;
+        return ['items' => $allItems];
     }
 
     /**
@@ -648,6 +670,70 @@ PROMPT;
         }
 
         return null;
+    }
+
+    /**
+     * Extrae TODAS las páginas de un PDF como imágenes PNG (base64).
+     * Se usa para resúmenes de tarjeta que ocupan varias páginas.
+     * Devuelve un array de ['data' => base64, 'mime' => 'image/png'].
+     */
+    private static function extractAllPagesFromPdf(string $pdfPath, int $maxPages = 15): array
+    {
+        $pages = [];
+
+        // Método 1: pdftoppm (poppler-utils) — convierte todas las páginas.
+        if (self::commandExists('pdftoppm')) {
+            try {
+                $prefix = tempnam(sys_get_temp_dir(), 'stmt_pages_');
+                @unlink($prefix); // pdftoppm agrega el sufijo -N.png
+                $command = sprintf(
+                    'pdftoppm -png -r 150 -l %d %s %s',
+                    $maxPages,
+                    escapeshellarg($pdfPath),
+                    escapeshellarg($prefix)
+                );
+                exec($command, $output, $returnCode);
+
+                // Recolectar los archivos generados (prefix-1.png, prefix-2.png, ...)
+                $generated = glob($prefix . '-*.png') ?: [];
+                natsort($generated);
+
+                foreach ($generated as $file) {
+                    $pages[] = ['data' => base64_encode(file_get_contents($file)), 'mime' => 'image/png'];
+                    @unlink($file);
+                }
+
+                if (! empty($pages)) {
+                    return $pages;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("InvoiceParser: pdftoppm (all pages) falló: " . $e->getMessage());
+            }
+        }
+
+        // Método 2: Imagick — iterar páginas.
+        if (extension_loaded('imagick')) {
+            try {
+                $imagick = new \Imagick();
+                $imagick->setResolution(150, 150);
+                $imagick->readImage($pdfPath);
+                foreach ($imagick as $i => $page) {
+                    if ($i >= $maxPages) {
+                        break;
+                    }
+                    $page->setImageFormat('png');
+                    $pages[] = ['data' => base64_encode($page->getImageBlob()), 'mime' => 'image/png'];
+                }
+                $imagick->destroy();
+                if (! empty($pages)) {
+                    return $pages;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("InvoiceParser: Imagick (all pages) falló: " . $e->getMessage());
+            }
+        }
+
+        return $pages;
     }
 
     /**
