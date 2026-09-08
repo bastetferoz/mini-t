@@ -351,54 +351,75 @@
 
     {{-- ═══ DESGLOSE ═══ --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {{-- Por proveedor --}}
+        {{-- Por proveedor (treemap) --}}
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-5">
             <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                 <x-heroicon-o-building-storefront class="w-4 h-4 text-amber-400" />
                 Por proveedor
             </h3>
-            @php $byProvider = $this->getByProvider(); @endphp
-            <div class="space-y-2">
-                @forelse ($byProvider as $provider => $total)
-                    @php $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0; @endphp
-                    <div>
-                        <div class="flex justify-between text-xs mb-0.5">
-                            <span class="text-gray-300">{{ $this->getProviderLabel($provider) }}</span>
-                            <span class="text-white">{{ number_format($total, 0, ',', '.') }} <span class="text-gray-500">({{ $percent }}%)</span></span>
+            @php
+                $byProvider = $this->getByProvider();
+                $maxProvider = collect($byProvider)->max() ?: 1;
+            @endphp
+            @if (count($byProvider) > 0)
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach ($byProvider as $provider => $total)
+                        @php
+                            $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0;
+                            // Área proporcional: base 22% del ancho + hasta 78% según su peso.
+                            $basis = 22 + ($total / $maxProvider) * 78;
+                            // Altura crece con el peso relativo (56px a 132px).
+                            $h = 56 + ($total / $maxProvider) * 76;
+                            // Intensidad de color según el peso (más grande = más saturado).
+                            $ratio = $total / $maxProvider;
+                            $bg = $ratio > 0.66 ? 'rgba(245,158,11,0.95)' : ($ratio > 0.33 ? 'rgba(245,158,11,0.65)' : 'rgba(245,158,11,0.38)');
+                            $txt = $ratio > 0.33 ? 'text-gray-900' : 'text-amber-100';
+                        @endphp
+                        <div class="rounded-lg p-2 flex flex-col justify-between overflow-hidden {{ $txt }}"
+                            style="flex: 1 1 {{ $basis }}%; min-width: 90px; height: {{ $h }}px; background: {{ $bg }};"
+                            title="{{ $this->getProviderLabel($provider) }}: {{ number_format($total, 0, ',', '.') }} ({{ $percent }}%)">
+                            <span class="text-xs font-semibold leading-tight truncate">{{ $this->getProviderLabel($provider) }}</span>
+                            <span class="text-[11px] font-bold leading-tight">{{ number_format($total, 0, ',', '.') }} <span class="opacity-70">({{ $percent }}%)</span></span>
                         </div>
-                        <div class="w-full bg-gray-600/40 rounded-full h-1.5">
-                            <div class="bg-amber-500 h-1.5 rounded-full" style="width: {{ min($percent, 100) }}%"></div>
-                        </div>
-                    </div>
-                @empty
-                    <p class="text-xs text-gray-500 text-center py-4">Sin datos.</p>
-                @endforelse
-            </div>
+                    @endforeach
+                </div>
+            @else
+                <p class="text-xs text-gray-500 text-center py-4">Sin datos.</p>
+            @endif
         </div>
 
-        {{-- Por empresa --}}
+        {{-- Por empresa (treemap) --}}
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-5">
             <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                 <x-heroicon-o-building-office class="w-4 h-4 text-blue-400" />
                 Por empresa
             </h3>
-            @php $byCompany = $this->getByCompany(); @endphp
-            <div class="space-y-2">
-                @forelse ($byCompany as $company => $total)
-                    @php $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0; @endphp
-                    <div>
-                        <div class="flex justify-between text-xs mb-0.5">
-                            <span class="text-gray-300">{{ ucfirst($company) }}</span>
-                            <span class="text-white">{{ number_format($total, 0, ',', '.') }} <span class="text-gray-500">({{ $percent }}%)</span></span>
+            @php
+                $byCompany = $this->getByCompany();
+                $maxCompany = collect($byCompany)->max() ?: 1;
+            @endphp
+            @if (count($byCompany) > 0)
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach ($byCompany as $company => $total)
+                        @php
+                            $percent = $yearTotal > 0 ? round(($total / $yearTotal) * 100, 1) : 0;
+                            $basis = 22 + ($total / $maxCompany) * 78;
+                            $h = 56 + ($total / $maxCompany) * 76;
+                            $ratio = $total / $maxCompany;
+                            $bg = $ratio > 0.66 ? 'rgba(59,130,246,0.95)' : ($ratio > 0.33 ? 'rgba(59,130,246,0.65)' : 'rgba(59,130,246,0.38)');
+                            $txt = $ratio > 0.33 ? 'text-white' : 'text-blue-100';
+                        @endphp
+                        <div class="rounded-lg p-2 flex flex-col justify-between overflow-hidden {{ $txt }}"
+                            style="flex: 1 1 {{ $basis }}%; min-width: 90px; height: {{ $h }}px; background: {{ $bg }};"
+                            title="{{ ucfirst($company) }}: {{ number_format($total, 0, ',', '.') }} ({{ $percent }}%)">
+                            <span class="text-xs font-semibold leading-tight truncate">{{ ucfirst($company) }}</span>
+                            <span class="text-[11px] font-bold leading-tight">{{ number_format($total, 0, ',', '.') }} <span class="opacity-70">({{ $percent }}%)</span></span>
                         </div>
-                        <div class="w-full bg-gray-600/40 rounded-full h-1.5">
-                            <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ min($percent, 100) }}%"></div>
-                        </div>
-                    </div>
-                @empty
-                    <p class="text-xs text-gray-500 text-center py-4">Sin datos de empresa.</p>
-                @endforelse
-            </div>
+                    @endforeach
+                </div>
+            @else
+                <p class="text-xs text-gray-500 text-center py-4">Sin datos de empresa.</p>
+            @endif
         </div>
     </div>
 

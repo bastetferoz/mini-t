@@ -1,353 +1,262 @@
-# Mini-T — Manual de usuario
+# Mini-T — Manual de la plataforma
 
-## Gestión de activos IT y offboarding
+## Gestión de activos IT, offboarding y facturación
+
+Sistema web (Laravel + Filament) para administrar equipos IT, el proceso de baja de empleados, la logística de devoluciones y el análisis de facturación de servicios, con carga de facturas asistida por IA.
 
 ---
 
 ## Índice
 
-1. [Acceso al sistema](#1-acceso-al-sistema)
+1. [Acceso y roles](#1-acceso-y-roles)
 2. [Dashboard](#2-dashboard)
-3. [Gestión de personas (Gente)](#3-gestión-de-personas)
-4. [Gestión de activos](#4-gestión-de-activos)
+3. [Gente (personas)](#3-gente-personas)
+4. [Activos](#4-activos)
 5. [Asignación de equipos](#5-asignación-de-equipos)
-6. [Proceso de baja (Offboarding)](#6-proceso-de-baja)
+6. [Proceso de baja (offboarding)](#6-proceso-de-baja-offboarding)
 7. [Devoluciones y logística](#7-devoluciones-y-logística)
-8. [Módulo de facturación](#8-módulo-de-facturación)
-9. [Plantillas de correo](#9-plantillas-de-correo)
-10. [Administración](#10-administración)
-11. [Roles y permisos](#11-roles-y-permisos)
+8. [Impresoras y conteo de páginas](#8-impresoras-y-conteo-de-páginas)
+9. [Facturación](#9-facturación)
+10. [Plantillas de correo](#10-plantillas-de-correo)
+11. [Administración](#11-administración)
+12. [Utilidades](#12-utilidades)
+13. [Roles y permisos](#13-roles-y-permisos)
+14. [Notas técnicas y mantenimiento](#14-notas-técnicas-y-mantenimiento)
 
 ---
 
-## 1. Acceso al sistema
+## 1. Acceso y roles
 
 **URL:** `http://tu-servidor/dashboard`
 
-Ingresá con tu email y contraseña. El sistema tiene 3 roles:
-- **Admin** — acceso total
-- **IT** — gestión de activos, personas y facturación
-- **RRHH** — confirmación de recepción de equipos
+Ingreso con email y contraseña. Hay 3 roles:
 
-<!-- 📸 Captura: pantalla de login -->
+- **Admin** — acceso total (incluye Administración y Backup).
+- **IT** — activos, personas, facturación, impresoras, importaciones.
+- **RRHH** — confirmación de recepción de equipos en el offboarding.
 
 ---
 
 ## 2. Dashboard
 
-Al ingresar se muestra el dashboard con:
-- **Métricas**: pendientes, en tránsito, entregados, demorados
-- **Personas con equipos a recuperar**: lista con días de demora
-- **Panel de seguimiento**: detalle del envío seleccionado
+Al ingresar se ve el dashboard de devoluciones pendientes:
 
-### Panel de seguimiento
-Al seleccionar una persona, el panel derecho (sticky) muestra:
-- Modalidad de envío (EnvíoPack o moto)
-- Número de seguimiento
-- Timeline de eventos
-- Botón "Actualizar" para consultar estado en tiempo real
-
-<!-- 📸 Captura: dashboard completo -->
-<!-- 📸 Captura: panel de seguimiento con timeline -->
+- **Métricas:** pendientes, en tránsito, entregados, demorados (>15 días).
+- **Personas con equipos a recuperar:** lista con días de demora.
+- **Panel de seguimiento (derecha):** al seleccionar una persona muestra la modalidad de envío, el número de seguimiento, el timeline de eventos y un botón "Actualizar" para consultar el estado en tiempo real.
 
 ---
 
-## 3. Gestión de personas
+## 3. Gente (personas)
 
 **Menú:** Gente
 
-### Crear persona
-1. Clic en "New"
-2. Completar: Nombre, Email, Área
-3. Seleccionar Servicios (Jira, Teams, Google Workspace, etc.)
-4. Guardar
+Estados de una persona: **activo**, **offboarding** (en baja), **inactivo** (baja completada). El listado de "Gente" muestra activos y en offboarding; los inactivos se ven en la sección Offboardings.
 
-### Ver ficha de persona
-La ficha muestra:
-- Datos personales
-- Equipos asignados (tabla con dispositivo, marca, modelo, serie)
-- Historial de activos (acciones previas)
+### Crear / editar
+Nombre, email, área y servicios asociados (Jira, Teams, Google Workspace, Slack, etc.).
 
-### Toggles de notificación
-Al editar una persona, podés activar:
-- **Nuevo ingreso** — envía correo de onboarding
-- **Asignación de equipo** — envía correo con detalle de equipos
-
-<!-- 📸 Captura: formulario de persona -->
-<!-- 📸 Captura: ficha con equipos asignados -->
+### Ficha de persona
+- Datos personales.
+- Equipos asignados (dispositivo, marca, modelo, serie).
+- Historial de activos (acciones previas).
+- Acciones de offboarding (ver sección 6).
 
 ---
 
-## 4. Gestión de activos
+## 4. Activos
 
-**Menú:** Activos *(solo admin/it)*
+**Menú:** Activos *(admin/it)*
 
-### Crear activo
-Campos: Dispositivo, Marca, Modelo, Procesador, Memoria, Disco, Nº Serie, Estado, Observaciones.
+Campos: dispositivo, marca, modelo, procesador, memoria, disco, Nº serie, estado, observaciones.
 
 ### Estados de un activo
 | Estado | Significado |
 |--------|-------------|
 | Disponible | Listo para asignar |
 | En uso | Asignado a una persona |
-| En devolución | En proceso de baja |
+| En devolución | En proceso de baja (in_transit) |
 | Dado de baja | Retirado del inventario |
 
-### Vista detalle
-Muestra todos los datos + historial completo del equipo (quién lo tuvo, por qué se movió, fechas).
-
-<!-- 📸 Captura: tabla de activos -->
-<!-- 📸 Captura: detalle de activo con historial -->
+La vista de detalle incluye el historial completo del equipo (quién lo tuvo, motivos de movimiento, fechas).
 
 ---
 
 ## 5. Asignación de equipos
 
-### Asignar
-1. Entrá a la ficha de una persona
-2. En la sección "Assignments", clic en "Asignar equipo"
-3. Buscá el equipo disponible
-4. Confirmar
+Desde la ficha de una persona, en la sección de equipos.
 
-El equipo pasa a estado "En uso".
-
-### Desasignar
-1. En la fila del equipo, clic en "Desasignar"
-2. Seleccionar motivo: Upgrade, Avería, Devolución
-3. Opcionalmente agregar observación
-4. Activar/desactivar envío de correo
-5. Confirmar
-
-### Reemplazar
-1. Clic en "Reemplazar"
-2. Seleccionar nuevo equipo
-3. Motivo: Upgrade, Avería, Reemplazo preventivo, Préstamo, Extravío
-4. Observación + correo opcional
-5. Confirmar
-
-El equipo viejo se libera (o retira si es avería/extravío) y el nuevo se asigna.
-
-<!-- 📸 Captura: modal de asignación -->
-<!-- 📸 Captura: modal de reemplazo -->
+- **Asignar:** elegí un equipo *disponible*. Pasa a "En uso".
+- **Desasignar:** motivo (upgrade, avería, devolución) + observación + correo opcional. Avería → el equipo pasa a "dado de baja"; el resto vuelve a "disponible".
+- **Reemplazar:** elegí el nuevo equipo y el motivo (upgrade, avería, reemplazo preventivo, préstamo, extravío). El viejo se libera o se retira (avería/extravío) y el nuevo queda "En uso". Correo opcional.
 
 ---
 
-## 6. Proceso de baja
+## 6. Proceso de baja (offboarding)
 
-### Iniciar baja
-1. Entrá a la ficha de la persona
-2. Clic en "Solicitar baja" (botón rojo)
-3. Se muestra un resumen de equipos asignados y servicios
-4. Confirmar
+### Solicitar baja *(admin/it)*
+Desde la ficha, botón rojo "Solicitar baja". Muestra el resumen de equipos y servicios. Al confirmar:
+- Los equipos pasan a "En devolución".
+- Las asignaciones se archivan (soft delete).
+- La persona pasa a "offboarding".
 
-**Qué sucede:**
-- Los equipos pasan a "En devolución"
-- Las asignaciones se eliminan (soft delete)
-- La persona pasa a estado "offboarding"
-- Se registra la fecha de inicio
+### Revertir baja *(solo admin)*
+Restaura las asignaciones y devuelve los equipos a "En uso" y la persona a "activo".
 
-### Revertir baja (solo admin)
-Si la baja fue un error:
-1. Botón gris "Revertir baja" (solo visible para admin)
-2. Confirmar
-3. Se restauran las asignaciones y los equipos vuelven a "En uso"
+### Registrar recepción — IT *(admin/it)*
+Por cada equipo se marca si fue devuelto o no (motivo: ausente, roto, incompleto). Al confirmar, la persona pasa a "inactivo" y se envía el correo de resumen.
 
-### Registrar recepción (IT)
-1. Botón verde "Registrar recepción"
-2. Para cada equipo, marcar si fue devuelto o no
-3. Si no fue devuelto, indicar motivo (ausente, roto, incompleto)
-4. Comentario opcional
-5. Confirmar
-
-La persona pasa a "inactive" y se envía correo de resumen.
-
-### Confirmación RRHH
-1. Desde el dashboard, RRHH ve el botón "Confirmar recepción"
-2. Se abre un modal con checkboxes por cada equipo
-3. Tildar los recibidos
-4. Confirmar
-
-Queda registrado en el historial por separado (IT vs RRHH).
-
-<!-- 📸 Captura: modal de solicitar baja -->
-<!-- 📸 Captura: botón revertir baja -->
-<!-- 📸 Captura: registrar recepción -->
-<!-- 📸 Captura: confirmación RRHH -->
+### Confirmar recepción — RRHH *(rrhh)*
+Desde el dashboard, RRHH tilda los equipos recibidos. Queda registrado en el historial de forma separada de la confirmación de IT (doble confirmación).
 
 ---
 
 ## 7. Devoluciones y logística
 
-### Coordinar envío
-Desde el dashboard, seleccioná una persona y elegí:
+Desde el dashboard, al seleccionar una persona:
 
-**EnvíoPack:**
-1. Ingresá el número de seguimiento (ej: EP013090165R)
-2. Comentario opcional
-3. "Guardar y coordinar"
-
-**Moto/Mensajería:**
-1. Fecha programada de retiro
-2. Contacto
-3. Comentario
-4. Guardar
+- **EnvíoPack:** se ingresa el número de seguimiento. El sistema consulta el tracking público de EnvíoPack.
+- **Moto / mensajería:** fecha de retiro y contacto.
 
 ### Tracking automático
-- El sistema consulta `api.enviopack.com/tracking/{numero}` (público, sin credenciales)
-- Botón "Actualizar" para consultar manualmente
-- Los estados se mapean: Pendiente → Retirado → En tránsito → Entregado
-- Cuando marca "Entregado", se dispara un correo automático
-
-### Editar envío
-Si el número de seguimiento es incorrecto:
-1. Clic en "Editar"
-2. Corregir datos
-3. Guardar
-
-<!-- 📸 Captura: formulario EnvíoPack -->
-<!-- 📸 Captura: timeline de tracking -->
+- Consulta `api.enviopack.com/tracking/{numero}` (público, sin credenciales).
+- Botón "Actualizar" para consulta manual; también corre programado.
+- Estados: pendiente → colectado/retirado → en tránsito → entregado.
+- Al detectar "entregado" se dispara un correo automático.
+- Si el número está mal, se puede editar el envío.
 
 ---
 
-## 8. Módulo de facturación
+## 8. Impresoras y conteo de páginas
 
-**Menú:** Facturación *(solo admin/it)*
+**Menú:** Infra → Impresoras / Diagnóstico SNMP / Conteo de páginas *(admin/it)*
 
-### Carga de facturas
+### Inventario de impresoras
+Alta manual o desde el diagnóstico SNMP. Campos: nombre, tipo (red/manual), IP, marca, modelo, Nº serie, ubicación, comunidad SNMP.
 
-#### Navegación por carpetas
-La sección "Carga" muestra:
-1. **Nivel 1** — Carpetas por proveedor (Amazon, Google, Telecom, etc.)
-2. **Nivel 2** — Carpetas por año
-3. **Nivel 3** — Tabla con las facturas (mes, servicio, referencia, monto, moneda, etc.)
+- **Marca, modelo y Nº serie son editables.** Se completan automáticamente la primera vez que se verifica la impresora por SNMP, pero después se pueden corregir a mano y las lecturas automáticas ya no los sobrescriben. Útil cuando el SNMP devuelve la placa de red en lugar del modelo real.
+
+### Diagnóstico SNMP
+Herramienta para probar una IP: ping, lectura de OIDs de contador, walk del árbol SNMP y consulta de un OID puntual. Permite guardar la impresora detectada en el inventario.
+
+### Conteo de páginas
+- Selector de año y día de conteo automático mensual.
+- Botón "Leer ahora" para sondear todas las impresoras de red al instante.
+- **Cuadro mensual:** contador al cierre de cada mes.
+- **Cuadro de diferencia mes a mes:** páginas nuevas impresas en cada mes (contador del mes menos el del anterior), con total anual.
+- **Carga manual:** permite cargar a mano el contador al cierre de un mes (por si falta una lectura). Impacta en la tabla y el análisis.
+- **Exportar (últimos 12 meses):** descarga un CSV con el contador y las páginas por mes de cada impresora.
+
+---
+
+## 9. Facturación
+
+**Menú:** Facturación *(admin/it)*
+
+### Carga (navegador de facturas)
+Navegación por carpetas: **Proveedor → Año → tabla de facturas**.
 
 #### Cargar con IA
-1. Clic en "Cargar con IA" (botón verde)
-2. Subir uno o varios archivos (PDF, JPG, PNG)
-3. La IA analiza cada archivo y extrae: proveedor, monto, moneda, fecha, período, Nº factura, referencia
-4. Se crea automáticamente el registro y se guarda el archivo en `storage/invoices/{proveedor}/{año}/{mes}/`
+1. Botón "Cargar con IA" y subir uno o varios archivos (PDF, JPG, PNG).
+2. Cada archivo se encola y se procesa en segundo plano (con separación entre uno y otro para no saturar la IA).
+3. La IA identifica el proveedor y extrae los datos (monto, moneda, fecha, período, Nº factura, referencia, empresa).
+4. La factura se crea y el archivo se guarda en `storage/invoices/{proveedor}/{año}/{mes}/`.
 
-**Proceso interno (2 etapas):**
-1. La IA identifica el proveedor por keywords configuradas
-2. Usa un prompt específico (o genérico) para extraer los datos
+**Reintentos:** si la IA falla por un límite temporal (rate limit / servidor saturado), el procesamiento se reintenta solo más tarde, para no perder la factura.
+
+**Deduplicación:** cada archivo se identifica por su contenido (hash). Si un adjunto ya se procesó antes, se descarta sin volver a llamar a la IA (ahorra tokens en correos/cargas repetidas).
 
 #### Carga manual
-Botón "Carga manual" → formulario completo con todos los campos.
+Formulario con todos los campos.
 
-#### Asignar empresa
-Cada factura puede asignarse a: Novatech, Phinxlab, o Cryptopatagonia.
-- Individual: botón en cada fila
-- Masivo: seleccionar varias → "Asignar empresa"
+#### Acciones en la tabla
+- **Período (columna editable):** selector de mes por factura. Cambia el mes al que se imputa la factura en el análisis. La elección manual manda sobre el criterio automático.
+- **Mover a:** reasigna la factura a otro proveedor.
+- **Reclasificar (keywords):** mueve las facturas de "otro" al proveedor cuyo texto/keywords coincidan (no usa IA).
+- **Reclasificar con IA:** re-consulta la IA para identificar el proveedor (usa tokens).
+- **Eliminar duplicados** y papelera individual.
+- **Asignar empresa:** Novatech, Phinxlab o Cryptopatagonia (individual o masivo).
 
-<!-- 📸 Captura: carpetas de proveedores -->
-<!-- 📸 Captura: modal de carga con IA -->
-<!-- 📸 Captura: tabla de facturas -->
+#### Cómo se determina el mes de una factura
+1. Se usa el **período de servicio** que declara la factura (ej: "Summary for Mar 1 - Mar 31").
+2. Si ese período difiere de la **fecha de emisión** en más de 2 meses, se considera un error de lectura y se usa la fecha de emisión.
+3. Si no hay período, se usa la fecha de emisión.
+4. Siempre se puede corregir a mano con la columna "Período".
 
 ### Análisis
-
 **Menú:** Facturación → Análisis
 
-Muestra:
-- Filtros por año y moneda
-- Checklist de proveedores (tildar/destildar)
-- Checklist de empresas
-- Resumen: total año, año anterior, variación %, promedio mensual
-- Tabla mes a mes por proveedor (o por empresa, según vista)
-- Desglose por proveedor con barras de progreso
-- Desglose por empresa
+- Filtros por año, proveedores y empresas.
+- Tabla mes a mes (por proveedor o por empresa; en modo empresa convierte ARS→USD).
+- Desglose por proveedor y por empresa.
+- Gráfico comparativo interanual.
+- Vistas guardadas de filtros.
 
-<!-- 📸 Captura: página de análisis -->
+### Proveedores
+**Menú:** Facturación → Proveedores *(admin)*
 
-### Proveedores de facturación
+Configuración por proveedor: nombre, identificador (slug), categoría, moneda habitual, empresa/gerencia, **palabras clave de detección** (la IA y el reclasificador las usan para identificar el proveedor), **prompt personalizado** (opcional), activo y multi-factura.
 
-**Menú:** Facturación → Proveedores
-
-Configurar proveedores para la detección automática por IA:
-- Nombre y slug (identificador)
-- Categoría (Cloud, Internet, Telefonía, etc.)
-- Moneda habitual
-- Palabras clave de detección (la IA las usa para identificar)
-- Prompt personalizado (opcional, para extracción precisa)
-
-<!-- 📸 Captura: lista de proveedores -->
-<!-- 📸 Captura: formulario de proveedor -->
+> Consejo: si un proveedor cae siempre en "otro", agregá una palabra clave que lo delate de forma única (por ejemplo, un prefijo constante del número de factura). El reclasificador por keywords busca también en el número de factura.
 
 ---
 
-## 9. Plantillas de correo
+## 10. Plantillas de correo
 
-**Menú:** Administración → Plantillas de correo *(solo admin)*
+**Menú:** Administración → Plantillas de correo *(admin)*
 
-### Tipos disponibles
+### Tipos
 | Tipo | Cuándo se envía |
 |------|----------------|
 | Asignación de activo | Al asignar un equipo |
 | Cambio de equipo | Al reemplazar un equipo |
 | Devolución de equipo | Al desasignar |
-| Alta de empleado | Al activar toggle "Nuevo ingreso" |
-| Baja de empleado | Al completar recepción |
+| Alta de empleado | Al activar el ingreso |
+| Baja de empleado | Al completar la recepción |
 | Reporte de equipos pendientes | Programado (periódico) |
 | Envío entregado | Automático al detectar entrega |
 
-### Configurar plantilla
-1. Nombre descriptivo
-2. Tipo de plantilla
-3. Asunto (puede usar variables)
-4. Cuerpo (editor rich text)
-5. Variables: botones clickeables que copian la variable al portapapeles
-6. Perfil SMTP
-7. **Configuración de envío:**
-   - Destinatario fijo
-   - CC
-   - Frecuencia (solo para reporte periódico)
+Cada plantilla define asunto, cuerpo (con variables `{{ }}`), perfil SMTP, destinatario/CC y frecuencia (para el reporte). Botón "Test" para enviar un correo de prueba con datos genéricos.
 
-### Variables por tipo
-- **Reporte pendientes:** `{{ pending_count }}`, `{{ pending_list }}`, `{{ date }}`
-- **Envío entregado:** `{{ person_name }}`, `{{ tracking_number }}`, `{{ carrier }}`, `{{ date }}`
-- **Asignación/Alta:** `{{ person_name }}`, `{{ asset }}`, `{{ date }}`
-- **Cambio:** `{{ person_name }}`, `{{ old_asset }}`, `{{ new_asset }}`, `{{ reason }}`, `{{ date }}`
-
-### Botón Test
-Cada plantilla tiene un botón "Test" que envía un correo real con datos genéricos al destinatario configurado, para verificar que funciona correctamente.
-
-<!-- 📸 Captura: formulario de plantilla -->
-<!-- 📸 Captura: botones de variables -->
+**Variables por tipo:**
+- Reporte pendientes: `{{ pending_count }}`, `{{ pending_list }}`, `{{ date }}`
+- Envío entregado: `{{ person_name }}`, `{{ tracking_number }}`, `{{ carrier }}`, `{{ date }}`
+- Asignación / Alta: `{{ person_name }}`, `{{ asset }}`, `{{ date }}`
+- Cambio: `{{ person_name }}`, `{{ old_asset }}`, `{{ new_asset }}`, `{{ reason }}`, `{{ date }}`
 
 ---
 
-## 10. Administración
+## 11. Administración
 
-### Usuarios
-**Menú:** Administración → Usuarios *(solo admin)*
+*(solo admin)*
 
-Crear/editar usuarios con:
-- Nombre, email, contraseña
-- Rol (admin, it, rrhh)
-- Permisos específicos
-
-### SMTP
-**Menú:** Administración → SMTP *(solo admin)*
-
-Perfiles de servidor de correo:
-- Servidor, puerto, usuario, contraseña, encriptación
-- Correo y nombre remitente
-- Botón "Probar perfil" para verificar conexión
-
-### IA
-**Menú:** Administración → IA *(solo admin)*
-
-Perfiles de inteligencia artificial para análisis de facturas:
-- Proveedores: OpenAI (GPT), Google (Gemini), Anthropic (Claude), Groq
-- Modelo específico por proveedor
-- API Key
-- Botón "Test" para verificar conexión
-- Marcar uno como predeterminado
-
-<!-- 📸 Captura: perfiles de IA -->
+- **Usuarios:** alta/edición con rol (admin, it, rrhh).
+- **SMTP:** perfiles de servidor de correo (host, puerto, usuario, encriptación, remitente). Botón "Probar perfil".
+- **IA:** perfiles de inteligencia artificial para el análisis de facturas. Proveedores: OpenAI (GPT), Google (Gemini), Anthropic (Claude), Groq. Se define modelo, API key y cuál es el predeterminado. Botón "Test".
 
 ---
 
-## 11. Roles y permisos
+## 12. Utilidades
+
+**Menú:** Utilidades → Importar asignaciones *(admin/it)*
+
+### Importar asignaciones (CSV)
+Columnas: `person,device,brand,model,cpu,ram,disk,serial`. Detecta el delimitador (coma, punto y coma, tab). Si el serial existe no duplica el equipo; si la persona no existe, la crea.
+
+### Impresoras y conteo (export/import JSON)
+- **Exportar impresoras:** descarga un JSON con todas las impresoras y su historial de lecturas.
+- **Importar impresoras:** sube ese JSON; las existentes (por IP o nombre) se actualizan, las nuevas se crean y se agregan las lecturas faltantes. Útil para no perder los datos de impresoras al actualizar producción.
+
+### Proveedores de facturación (export/import JSON)
+Exporta/importa la configuración de proveedores.
+
+### Backup de base de datos *(solo admin)*
+- **Exportar:** descarga un `.sql` completo.
+- **Importar:** sube un `.sql` y restaura (sobrescribe los datos).
+
+---
+
+## 13. Roles y permisos
 
 | Funcionalidad | Admin | IT | RRHH |
 |--------------|-------|-----|------|
@@ -359,46 +268,27 @@ Perfiles de inteligencia artificial para análisis de facturas:
 | Revertir baja | ✓ | ✗ | ✗ |
 | Registrar recepción (IT) | ✓ | ✓ | ✗ |
 | Confirmar recepción (RRHH) | ✗ | ✗ | ✓ |
-| Importar asignaciones | ✓ | ✓ | ✗ |
+| Impresoras y conteo | ✓ | ✓ | ✗ |
+| Importar / exportar | ✓ | ✓ | ✗ |
 | Facturación | ✓ | ✓ | ✗ |
-| Administración (Usuarios, SMTP, IA, Plantillas) | ✓ | ✗ | ✗ |
-| Backup/Restore DB | ✓ | ✗ | ✗ |
+| Administración (Usuarios, SMTP, IA, Plantillas, Proveedores) | ✓ | ✗ | ✗ |
+| Backup / Restore DB | ✓ | ✗ | ✗ |
 
 ---
 
-## Importar asignaciones masivas
+## 14. Notas técnicas y mantenimiento
 
-**Menú:** Utilidades → Importar asignaciones *(admin/it)*
-
-### Formato CSV
-El archivo debe tener estas columnas (encabezado en la primera fila):
-
-```
-person,device,brand,model,cpu,ram,disk,serial
-Juan Pérez,Notebook,Dell,Latitude 5520,i5,8GB,256GB SSD,ABC123
-María García,Mouse,Logitech,M170,,,,
-```
-
-- Si el serial existe, no duplica el equipo
-- Si la persona no existe, la crea
-- Detecta automáticamente delimitador (coma, punto y coma, tab)
-
-### Backup de Base de Datos (solo admin)
-- **Exportar:** descarga archivo .sql completo
-- **Importar:** sube un .sql y restaura (sobreescribe datos)
-
-<!-- 📸 Captura: página de importación -->
+- **Correos:** se envían con el perfil SMTP de la plantilla; si no tiene, usa el predeterminado.
+- **Tracking:** consulta la API pública de EnvíoPack; se actualiza de forma programada y a demanda.
+- **IA de facturas:** usa el perfil de IA marcado como predeterminado. Procesa PDF e imágenes; de los PDF toma la primera página.
+- **Cola de procesamiento:** las cargas de facturas y reprocesos con IA corren en segundo plano (worker de cola). Tras actualizar el servidor hay que reiniciar el worker.
+- **Comandos útiles (consola del servidor):**
+  - `php artisan invoices:audit [proveedor]` — audita facturas: período, fecha de emisión y mes asignado; marca las inconsistentes y resume por mes. Solo lectura.
+  - `php artisan invoices:sync-periods [--dry-run]` — recalcula el mes/año de todas las facturas según el criterio actual, sin usar IA. Con `--dry-run` solo muestra qué cambiaría.
+  - `php artisan invoices:remove-duplicates` — elimina facturas duplicadas.
+- **Actualización de producción:** `./update.sh` (trae cambios, corre migraciones, compila y reinicia el worker).
+- **Archivos de facturas:** en `storage/app/public/invoices/`, organizados por proveedor/año/mes.
 
 ---
 
-## Notas técnicas
-
-- **Correos:** se envían usando el perfil SMTP configurado en la plantilla. Si no tiene, usa el predeterminado.
-- **Tracking:** consulta `api.enviopack.com` (público). El job `UpdateTrackingStatus` corre cada 30 minutos.
-- **Reporte periódico:** el comando `mail:pending-assets-report` corre a las 9:00 AM y evalúa la frecuencia configurada.
-- **IA de facturas:** usa el perfil marcado como predeterminado. Soporta PDF e imágenes.
-- **Archivos:** se guardan en `storage/app/public/invoices/` organizados por proveedor/año/mes.
-
----
-
-*Mini-T — Gestión de activos IT v1.0*
+*Mini-T — Manual de la plataforma. Actualizado a septiembre 2026.*
