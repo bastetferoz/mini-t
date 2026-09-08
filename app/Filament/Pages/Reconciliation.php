@@ -32,6 +32,9 @@ class Reconciliation extends Page implements HasForms
     /** Nombre de la persona cuyos consumos se quieren conciliar (tal como figura en el resumen). */
     public string $targetName = 'RODOLFO DURANTE';
 
+    /** Texto del resumen pegado manualmente (alternativa a subir el PDF). */
+    public string $pastedText = '';
+
     /**
      * Resultado de la última conciliación.
      * Cada item: ['description' => ..., 'amount' => ..., 'currency' => ..., 'matched' => bool, 'invoice' => ...]
@@ -98,13 +101,122 @@ class Reconciliation extends Page implements HasForms
             return;
         }
 
-        $items = $parsed['items'] ?? [];
+        $this->conciliar($parsed['items'] ?? []);
+    }
 
+    /**
+     * Analiza texto pegado manualmente (sin IA): una línea por consumo,
+     * con la descripción y el monto (el monto al final de la línea).
+     */
+    public function analyzeText(): void
+    {
+        $texto = trim($this->pastedText ?? '');
+
+        if ($texto === '') {
+            Notification::make()->title('Pegá el texto del resumen primero')->warning()->send();
+            return;
+        }
+
+        $items = $this->parsePastedText($texto);
+
+        if (empty($items)) {
+            Notification::make()
+                ->title('No se detectaron consumos')
+                ->body('Revisá que cada línea tenga la descripción y el monto (ej: GOOGLE ... 19,99).')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $this->conciliar($items);
+    }
+
+    /**
+     * Parsea texto pegado. Por cada línea toma el último número como monto
+     * y el resto como descripción. Soporta formato AR (1.234,56) y US (1,234.56).
+     */
+    private function parsePastedText(string $texto): array
+    {
+        $items = [];
+
+        foreach (preg_split('/\r\n|\r|\n/', $texto) as $linea) {
+            $linea = trim($linea);
+            if ($linea === '') {
+                continue;
+            }
+
+            // Buscar todos los números de la línea; el último se toma como monto.
+            if (! preg_match_all('/-?[\d.,]+/', $linea, $nums) || empty($nums[0])) {
+                continue;
+            }
+
+            $rawAmount = end($nums[0]);
+            $amount = $this->normalizeAmount($rawAmount);
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $currency = preg_match('/USD|U\$S/i', $linea) ? 'USD' : 'ARS';
+
+            // Descripción = la línea, quitando de la cola: moneda + monto (en cualquier orden).
+            $desc = $linea;
+            // Quitar moneda/símbolo al final
+            $desc = preg_replace('/\s*(USD|ARS|U\$S|\$)\s*$/i', '', $desc);
+            // Quitar el monto al final
+            $desc = preg_replace('/\s*' . preg_quote($rawAmount, '/') . '\s*$/', '', $desc);
+            // Quitar moneda/símbolo que pudiera haber quedado antes del monto
+            $desc = trim(preg_replace('/\s*(USD|ARS|U\$S|\$)\s*$/i', '', $desc));
+
+            if ($desc === '') {
+                continue;
+            }
+
+            $items[] = ['description' => $desc, 'amount' => $amount, 'currency' => $currency];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Normaliza un monto en texto (AR o US) a float.
+     */
+    private function normalizeAmount(string $raw): float
+    {
+        $raw = trim($raw);
+
+        // Si tiene coma Y punto: el último separador es el decimal.
+        if (str_contains($raw, ',') && str_contains($raw, '.')) {
+            if (strrpos($raw, ',') > strrpos($raw, '.')) {
+                // Formato AR: 1.234,56
+                $raw = str_replace('.', '', $raw);
+                $raw = str_replace(',', '.', $raw);
+            } else {
+                // Formato US: 1,234.56
+                $raw = str_replace(',', '', $raw);
+            }
+        } elseif (str_contains($raw, ',')) {
+            // Solo coma: decimal AR (1234,56) o miles US (1,234)
+            // Si hay 2 dígitos después de la coma, es decimal.
+            if (preg_match('/,\d{2}$/', $raw)) {
+                $raw = str_replace(',', '.', $raw);
+            } else {
+                $raw = str_replace(',', '', $raw);
+            }
+        }
+
+        return (float) $raw;
+    }
+
+    /**
+     * Cruza los consumos contra las facturas de los últimos 2 meses y arma la tabla.
+     */
+    private function conciliar(array $items): void
+    {
         // Facturas de los últimos 2 meses para cruzar
         $desde = now()->subMonths(2)->startOfMonth();
         $facturas = Invoice::where('invoice_date', '>=', $desde)
             ->orWhere(function ($q) use ($desde) {
-                // También por period/month-year recientes
                 $q->whereYear('created_at', '>=', $desde->year);
             })
             ->get(['id', 'provider', 'service', 'reference', 'amount', 'currency', 'invoice_number', 'month', 'year']);
@@ -196,5 +308,6 @@ class Reconciliation extends Page implements HasForms
         $this->results = [];
         $this->analyzed = false;
         $this->data = [];
+        $this->pastedText = '';
     }
 }

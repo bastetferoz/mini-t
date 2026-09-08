@@ -19,7 +19,7 @@
 
         <div class="mt-4 flex gap-3">
             <x-filament::button wire:click="analyze" color="success" icon="heroicon-o-sparkles" wire:loading.attr="disabled" wire:target="analyze">
-                <span wire:loading.remove wire:target="analyze">Analizar y conciliar</span>
+                <span wire:loading.remove wire:target="analyze">Analizar PDF con IA</span>
                 <span wire:loading wire:target="analyze">Analizando...</span>
             </x-filament::button>
 
@@ -28,6 +28,24 @@
                     Limpiar
                 </x-filament::button>
             @endif
+        </div>
+
+        {{-- Alternativa: pegar el texto manualmente --}}
+        <div class="mt-6 pt-5 border-t border-gray-700">
+            <h4 class="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+                <x-heroicon-o-clipboard class="w-4 h-4 text-amber-400" />
+                O pegá el texto del resumen (sin IA)
+            </h4>
+            <p class="text-xs text-gray-400 mb-3">
+                Copiá y pegá solo las líneas de consumos de la persona (una por línea, con el monto al final). No usa IA, así controlás exactamente qué se concilia.
+            </p>
+            <textarea wire:model="pastedText" rows="6" placeholder="GOOGLE *Google Workspace     19,99&#10;GODADDY 44122814     55,19&#10;ANTHROPIC* CLAUD     15,32"
+                class="w-full rounded-lg bg-gray-900 border border-gray-600 text-white px-3 py-2 text-sm font-mono focus:border-amber-400 focus:ring-0"></textarea>
+            <div class="mt-3">
+                <x-filament::button wire:click="analyzeText" color="warning" icon="heroicon-o-clipboard-document-check">
+                    Analizar texto pegado
+                </x-filament::button>
+            </div>
         </div>
     </div>
 
