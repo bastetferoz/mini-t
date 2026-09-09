@@ -90,8 +90,18 @@ class ProcessInvoiceFile implements ShouldQueue
             }
         }
 
-        // Organizar archivo
-        $finalPath = InvoiceParserService::organizeFile($this->filePath, $parsed);
+        // Organizar archivo usando el provider/year/month REALES de la factura
+        // (no los que dedujo el parser), para que quede en la carpeta correcta.
+        $finalPath = InvoiceParserService::organizeFile($this->filePath, $parsed, $provider, $year, $month);
+
+        // NO crear la factura si el archivo no quedó guardado: evita registros
+        // huérfanos que apuntan a un PDF inexistente (403 al abrirlos).
+        if (! $finalPath) {
+            $error = InvoiceParserService::$lastError ?? 'No se pudo guardar el archivo';
+            Log::error("ProcessInvoiceFile: {$this->filePath} no se guardó, no se crea la factura: {$error}");
+            ActivityLogger::facturacion("❌ Cola: No se pudo guardar el archivo de " . basename($this->filePath) . " - {$error}");
+            return;
+        }
 
         // Crear factura
         $invoice = Invoice::create([

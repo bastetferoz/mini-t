@@ -38,6 +38,18 @@ class ReprocessInvoiceWithAi implements ShouldQueue
 
             if ($newProvider && $newProvider !== 'otro' && $newProvider !== $invoice->provider) {
                 $invoice->update(['provider' => $newProvider]);
+
+                // Mover el archivo a la carpeta del nuevo proveedor.
+                $newPath = InvoiceParserService::moveToProvider(
+                    $invoice->file_path,
+                    $newProvider,
+                    (int) $invoice->year,
+                    (int) $invoice->month,
+                );
+                if ($newPath && $newPath !== $invoice->file_path) {
+                    $invoice->update(['file_path' => $newPath]);
+                }
+
                 Log::info("ReprocessInvoiceWithAi: #{$invoice->id} reclasificada a '{$newProvider}'");
             }
         } else {

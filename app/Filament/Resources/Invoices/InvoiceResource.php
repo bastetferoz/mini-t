@@ -273,6 +273,20 @@ class InvoiceResource extends Resource
 
                                 if ($matched && $matched !== $record->provider) {
                                     $record->update(['provider' => $matched]);
+
+                                    // Mover el archivo a la carpeta del nuevo proveedor.
+                                    if ($record->file_path) {
+                                        $newPath = \App\Services\InvoiceParserService::moveToProvider(
+                                            $record->file_path,
+                                            $matched,
+                                            (int) $record->year,
+                                            (int) $record->month,
+                                        );
+                                        if ($newPath && $newPath !== $record->file_path) {
+                                            $record->update(['file_path' => $newPath]);
+                                        }
+                                    }
+
                                     $reclassified++;
                                 }
                             }

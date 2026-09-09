@@ -313,6 +313,20 @@ class InvoiceBrowser extends Page
 
         $invoice->update(['provider' => $newProvider]);
 
+        // Mover el archivo a la carpeta del nuevo proveedor para que el file_path
+        // siga apuntando al PDF real (si no, quedaría en la carpeta vieja).
+        if ($invoice->file_path) {
+            $newPath = InvoiceParserService::moveToProvider(
+                $invoice->file_path,
+                $newProvider,
+                (int) $invoice->year,
+                (int) $invoice->month,
+            );
+            if ($newPath && $newPath !== $invoice->file_path) {
+                $invoice->update(['file_path' => $newPath]);
+            }
+        }
+
         $label = $this->getProviderLabel($newProvider);
         \App\Services\ActivityLogger::facturacion("🔀 Factura #{$invoice->id} movida de '{$oldProvider}' a '{$newProvider}'");
 

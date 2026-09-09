@@ -214,11 +214,26 @@ class MailIngestService
         // ─── DEDUPLICACIÓN ANTES DE LA IA ───
         // Calcular el hash del contenido y, si este adjunto ya se procesó antes,
         // descartarlo SIN llamar a la IA (ahorra tokens en correos repetidos).
+        // EXCEPCIÓN: si la factura vinculada perdió su archivo, permitimos
+        // reprocesar para recuperarlo.
         $hash = hash('sha256', $content);
 
-        if (\App\Models\IngestedAttachment::alreadyProcessed($hash)) {
-            ActivityLogger::facturacion("⏭️ Mail Ingest: adjunto ya procesado, omitido sin IA ({$filename})");
-            return null;
+        $ingested = \App\Models\IngestedAttachment::where('hash', $hash)->first();
+
+        if ($ingested) {
+            $facturaTieneArchivo = false;
+            if ($ingested->invoice_id) {
+                $factInv = Invoice::find($ingested->invoice_id);
+                $facturaTieneArchivo = $factInv
+                    && $factInv->file_path
+                    && Storage::disk('public')->exists($factInv->file_path);
+            }
+
+            if ($facturaTieneArchivo) {
+                ActivityLogger::facturacion("⏭️ Mail Ingest: adjunto ya procesado, omitido sin IA ({$filename})");
+                return null;
+            }
+            // Si no tiene archivo, seguimos para recuperarlo (no retornamos).
         }
 
         // Guardar en temp
@@ -233,31 +248,56 @@ class MailIngestService
             return false;
         }
 
-        // Verificar duplicado
         $invoiceNumber = $parsed['invoice_number'] ?? null;
         $provider = InvoiceParserService::normalizeProvider($parsed['provider'] ?? null);
+        $period = $parsed['period'] ?? now()->format('Y-m');
+        $invoiceDate = $parsed['invoice_date'] ?? null;
+        [$year, $month] = Invoice::deriveMonthYear($period, $invoiceDate);
 
-        if ($invoiceNumber) {
-            $exists = Invoice::where('invoice_number', $invoiceNumber)
-                ->where('provider', $provider)
-                ->exists();
+        // Verificar duplicado por número + proveedor
+        $existing = $invoiceNumber
+            ? Invoice::where('invoice_number', $invoiceNumber)->where('provider', $provider)->first()
+            : null;
 
-            if ($exists) {
+        if ($existing) {
+            $tieneArchivo = $existing->file_path && Storage::disk('public')->exists($existing->file_path);
+
+            if ($tieneArchivo) {
+                // Duplicado real: ya está cargada y con archivo. Omitir.
                 ActivityLogger::facturacion("⚠️ Mail Ingest: duplicada omitida {$provider} Nº {$invoiceNumber}");
-                // Registrar el hash para no volver a analizarla con IA en el futuro.
                 \App\Models\IngestedAttachment::firstOrCreate(
                     ['hash' => $hash],
-                    ['filename' => $filename, 'provider' => $provider, 'invoice_number' => $invoiceNumber]
+                    ['filename' => $filename, 'provider' => $provider, 'invoice_number' => $invoiceNumber, 'invoice_id' => $existing->id]
                 );
                 Storage::disk('public')->delete($tempPath);
                 return null;
             }
+
+            // La factura existe pero SIN archivo: recuperar el archivo perdido.
+            $finalPath = InvoiceParserService::organizeFile($tempPath, $parsed, $provider, $year, $month);
+            if (! $finalPath) {
+                ActivityLogger::facturacion("❌ Mail Ingest: no se pudo guardar el archivo de recuperación de {$provider} Nº {$invoiceNumber}");
+                Storage::disk('public')->delete($tempPath);
+                return false;
+            }
+
+            $existing->update(['file_path' => $finalPath]);
+            \App\Models\IngestedAttachment::updateOrCreate(
+                ['hash' => $hash],
+                ['filename' => $filename, 'provider' => $provider, 'invoice_number' => $invoiceNumber, 'invoice_id' => $existing->id]
+            );
+            ActivityLogger::facturacion("♻️ Mail Ingest: archivo recuperado para {$provider} Nº {$invoiceNumber} (factura #{$existing->id})");
+            return true;
         }
 
-        // Organizar archivo
-        $finalPath = InvoiceParserService::organizeFile($tempPath, $parsed);
-        $period = $parsed['period'] ?? now()->format('Y-m');
-        $parts = explode('-', $period);
+        // Organizar archivo (con provider/year/month reales; devuelve null si falla)
+        $finalPath = InvoiceParserService::organizeFile($tempPath, $parsed, $provider, $year, $month);
+
+        if (! $finalPath) {
+            ActivityLogger::facturacion("❌ Mail Ingest: no se pudo guardar el archivo de {$filename}, no se crea la factura");
+            Storage::disk('public')->delete($tempPath);
+            return false;
+        }
 
         // Crear factura
         $invoice = Invoice::create([
@@ -267,10 +307,10 @@ class MailIngestService
             'reference' => $parsed['reference'] ?? null,
             'amount' => $parsed['amount'] ?? 0,
             'currency' => $parsed['currency'] ?? 'ARS',
-            'invoice_date' => $parsed['invoice_date'] ?? now()->toDateString(),
+            'invoice_date' => $invoiceDate ?? now()->toDateString(),
             'period' => $period,
-            'month' => (int) ($parts[1] ?? now()->month),
-            'year' => (int) ($parts[0] ?? now()->year),
+            'month' => $month,
+            'year' => $year,
             'invoice_number' => $invoiceNumber,
             'file_path' => $finalPath,
             'notes' => 'Cargada automáticamente desde email',
@@ -287,7 +327,7 @@ class MailIngestService
         }
 
         // Registrar el hash del adjunto para no reprocesarlo con IA en el futuro.
-        \App\Models\IngestedAttachment::firstOrCreate(
+        \App\Models\IngestedAttachment::updateOrCreate(
             ['hash' => $hash],
             [
                 'filename' => $filename,

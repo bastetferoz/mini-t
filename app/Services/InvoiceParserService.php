@@ -565,25 +565,85 @@ PROMPT;
     /**
      * Mueve el archivo a la carpeta organizada: invoices/{provider}/{year}/{month}/
      */
-    public static function organizeFile(string $tempPath, array $parsedData): string
+    public static function organizeFile(string $tempPath, array $parsedData, ?string $provider = null, ?int $year = null, ?int $month = null): ?string
     {
-        $provider = $parsedData['provider'] ?? 'sin_proveedor';
+        // Provider/year/month: usar los explícitos si se pasan (los reales de la
+        // factura), y solo caer a los del parsed como fallback. Esto evita que el
+        // archivo quede en 'sin_proveedor' o en un mes distinto al de la factura.
+        $provider = $provider ?? ($parsedData['provider'] ?? 'sin_proveedor');
         $provider = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $provider));
 
-        $period = $parsedData['period'] ?? now()->format('Y-m');
-        $parts = explode('-', $period);
-        $year = $parts[0] ?? now()->year;
-        $month = $parts[1] ?? now()->month;
+        if ($year === null || $month === null) {
+            $period = $parsedData['period'] ?? now()->format('Y-m');
+            $parts = explode('-', $period);
+            $year = $year ?? (int) ($parts[0] ?? now()->year);
+            $month = $month ?? (int) ($parts[1] ?? now()->month);
+        }
 
-        $extension = pathinfo($tempPath, PATHINFO_EXTENSION);
+        // Verificar que el archivo de origen exista antes de mover.
+        if (! Storage::disk('public')->exists($tempPath)) {
+            self::$lastError = "Archivo temporal no encontrado al organizar: {$tempPath}";
+            \Log::error("InvoiceParser: " . self::$lastError);
+            return null;
+        }
+
+        $extension = pathinfo($tempPath, PATHINFO_EXTENSION) ?: 'pdf';
         $filename = ($parsedData['invoice_number'] ?? uniqid('inv_')) . '.' . $extension;
         $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $filename);
 
         $destination = "invoices/{$provider}/{$year}/{$month}/{$filename}";
 
-        Storage::disk('public')->move($tempPath, $destination);
+        try {
+            Storage::disk('public')->move($tempPath, $destination);
+        } catch (\Throwable $e) {
+            self::$lastError = "No se pudo mover el archivo a {$destination}: " . $e->getMessage();
+            \Log::error("InvoiceParser: " . self::$lastError);
+            return null;
+        }
+
+        // Confirmar que el archivo quedó realmente en destino.
+        if (! Storage::disk('public')->exists($destination)) {
+            self::$lastError = "El archivo no quedó guardado en {$destination}";
+            \Log::error("InvoiceParser: " . self::$lastError);
+            return null;
+        }
 
         return $destination;
+    }
+
+    /**
+     * Mueve el archivo de una factura a la carpeta del proveedor indicado,
+     * manteniendo year/month. Devuelve la nueva ruta o null si falla.
+     * Se usa al reclasificar el proveedor de una factura ya cargada.
+     */
+    public static function moveToProvider(string $currentPath, string $provider, int $year, int $month): ?string
+    {
+        if (! Storage::disk('public')->exists($currentPath)) {
+            return null;
+        }
+
+        $provider = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $provider));
+        $filename = basename($currentPath);
+        $destination = "invoices/{$provider}/{$year}/{$month}/{$filename}";
+
+        if ($destination === $currentPath) {
+            return $currentPath; // ya está en su lugar
+        }
+
+        try {
+            // Si ya existe algo con ese nombre en destino, agregar sufijo único.
+            if (Storage::disk('public')->exists($destination)) {
+                $base = pathinfo($filename, PATHINFO_FILENAME);
+                $ext = pathinfo($filename, PATHINFO_EXTENSION) ?: 'pdf';
+                $destination = "invoices/{$provider}/{$year}/{$month}/{$base}_" . substr(md5($currentPath), 0, 6) . ".{$ext}";
+            }
+            Storage::disk('public')->move($currentPath, $destination);
+        } catch (\Throwable $e) {
+            \Log::error("InvoiceParser: moveToProvider falló: " . $e->getMessage());
+            return null;
+        }
+
+        return Storage::disk('public')->exists($destination) ? $destination : null;
     }
 
     /**
