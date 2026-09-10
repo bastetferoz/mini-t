@@ -130,8 +130,8 @@ class InvoiceProviderResource extends Resource
 
                     TextInput::make('odoo_ref_source')
                         ->label('Referencia')
-                        ->placeholder('Ej: Suscripción {numero}')
-                        ->helperText('Texto que va en el campo Referencia de la factura en Odoo. Podés usar variables: {numero}, {servicio}, {periodo}, {proveedor}. Si lo dejás vacío, se usa el número de factura.'),
+                        ->placeholder('Ej: {dominio}  ó  Suscripción {numero}')
+                        ->helperText('Texto para el campo Referencia en Odoo. Variables: {numero}, {referencia}, {dominio}, {servicio}, {periodo}, {proveedor}. Para Google usá {dominio}. Si lo dejás vacío, se usa el número de factura.'),
 
                     Select::make('odoo_product_id')
                         ->label('Producto en Odoo')

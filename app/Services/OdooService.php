@@ -290,10 +290,12 @@ class OdooService
             $ref = $invoice->invoice_number ?: $provider->name;
         } else {
             $ref = strtr($plantillaRef, [
-                '{numero}'    => (string) ($invoice->invoice_number ?? ''),
-                '{servicio}'  => (string) ($invoice->service ?? ''),
-                '{periodo}'   => (string) ($invoice->period ?? ''),
-                '{proveedor}' => (string) $provider->name,
+                '{numero}'     => (string) ($invoice->invoice_number ?? ''),
+                '{servicio}'   => (string) ($invoice->service ?? ''),
+                '{referencia}' => (string) ($invoice->reference ?? ''),
+                '{dominio}'    => (string) ($invoice->reference ?? ''), // alias: el dominio se guarda en reference
+                '{periodo}'    => (string) ($invoice->period ?? ''),
+                '{proveedor}'  => (string) $provider->name,
             ]);
         }
 
