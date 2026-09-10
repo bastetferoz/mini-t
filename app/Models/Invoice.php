@@ -23,13 +23,18 @@ class Invoice extends Model
         'invoice_number',
         'file_path',
         'notes',
+        'odoo_move_id',
+        'odoo_synced_at',
+        'odoo_dismissed',
     ];
 
     protected $casts = [
-    'amount'        => 'decimal:2',
-    'amount_usd'    => 'decimal:2',
-    'exchange_rate' => 'decimal:4',
-    'invoice_date'  => 'date',
+    'amount'         => 'decimal:2',
+    'amount_usd'     => 'decimal:2',
+    'exchange_rate'  => 'decimal:4',
+    'invoice_date'   => 'date',
+    'odoo_synced_at' => 'datetime',
+    'odoo_dismissed' => 'boolean',
 ];
 
     protected static function booted(): void

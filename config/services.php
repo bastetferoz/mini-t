@@ -45,4 +45,11 @@ return [
         'secret_key' => env('ENVIOPACK_SECRET_KEY'),
     ],
 
+    'odoo' => [
+        'url'      => env('ODOO_URL'),        // ej: http://3.238.64.174
+        'db'       => env('ODOO_DB'),         // ej: nova-prod-v15-1
+        'username' => env('ODOO_USERNAME'),   // ej: it@phinxlab.com
+        'password' => env('ODOO_PASSWORD'),   // contraseña o API key
+    ],
+
 ];

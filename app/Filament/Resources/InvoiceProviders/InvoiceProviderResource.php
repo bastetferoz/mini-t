@@ -28,6 +28,12 @@ class InvoiceProviderResource extends Resource
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-building-office';
     protected static ?int $navigationSort = 3;
 
+    /** Servicio Odoo para los desplegables de configuración. */
+    protected static function odoo(): \App\Services\OdooService
+    {
+        return new \App\Services\OdooService();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -103,6 +109,51 @@ class InvoiceProviderResource extends Resource
                 ->label('Multi-factura')
                 ->default(false)
                 ->helperText('Activar si este proveedor puede tener varias facturas en el mismo mes (ej: Google con múltiples dominios, Microsoft con distintos planes).'),
+
+            Toggle::make('sync_to_odoo')
+                ->label('Cargar en Odoo')
+                ->default(false)
+                ->live()
+                ->helperText('Activar si las facturas de este proveedor se deben cargar en Odoo.'),
+
+            \Filament\Schemas\Components\Section::make('Configuración Odoo')
+                ->description('Mapeo de este proveedor a Odoo. Se usa al cargar sus facturas.')
+                ->visible(fn ($get) => (bool) $get('sync_to_odoo'))
+                ->columns(2)
+                ->schema([
+                    Select::make('odoo_partner_id')
+                        ->label('Proveedor en Odoo')
+                        ->searchable()
+                        ->getSearchResultsUsing(fn (string $search) => static::odoo()->partnerOptions($search))
+                        ->getOptionLabelUsing(fn ($value) => static::odoo()->partnerLabel((int) $value))
+                        ->helperText('Buscá el proveedor tal como está en Odoo.'),
+
+                    TextInput::make('odoo_ref_source')
+                        ->label('Referencia')
+                        ->placeholder('Ej: Suscripción {numero}')
+                        ->helperText('Texto que va en el campo Referencia de la factura en Odoo. Podés usar variables: {numero}, {servicio}, {periodo}, {proveedor}. Si lo dejás vacío, se usa el número de factura.'),
+
+                    Select::make('odoo_product_id')
+                        ->label('Producto en Odoo')
+                        ->searchable()
+                        ->getSearchResultsUsing(fn (string $search) => static::odoo()->productOptions($search))
+                        ->getOptionLabelUsing(fn ($value) => collect(static::odoo()->productOptions((string) $value))->get((int) $value) ?? ('#' . $value))
+                        ->helperText('Producto que se usa en la línea de la factura.'),
+
+                    Select::make('odoo_account_id')
+                        ->label('Cuenta contable')
+                        ->searchable()
+                        ->getSearchResultsUsing(fn (string $search) => static::odoo()->accountOptions($search))
+                        ->getOptionLabelUsing(fn ($value) => static::odoo()->accountLabel((int) $value) ?? ('#' . $value))
+                        ->helperText('Opcional. Si la dejás vacía, se usa la cuenta por defecto del producto.'),
+
+                    Select::make('odoo_tax_ids')
+                        ->label('Impuestos')
+                        ->multiple()
+                        ->searchable()
+                        ->options(fn () => static::odoo()->purchaseTaxOptions())
+                        ->helperText('Podés agregar uno o varios (ej: IVA + percepciones).'),
+                ]),
         ]);
     }
 
@@ -146,6 +197,10 @@ class InvoiceProviderResource extends Resource
                     ->formatStateUsing(fn ($state) => $state ? '✓ Custom' : 'Genérico')
                     ->badge()
                     ->color(fn ($state) => $state ? 'success' : 'gray'),
+
+                IconColumn::make('sync_to_odoo')
+                    ->label('Odoo')
+                    ->boolean(),
 
                 IconColumn::make('is_active')
                     ->label('Activo')
