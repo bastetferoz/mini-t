@@ -105,6 +105,12 @@ class OdooSync extends Page
         return empty($years) ? [(int) now()->year] : $years;
     }
 
+    /** Referencia que se enviará a Odoo para esta factura (según su proveedor). */
+    public function refFor(Invoice $invoice): string
+    {
+        return \App\Services\OdooService::resolveReference($invoice);
+    }
+
     /** URL directa a la factura en Odoo. */
     public function odooUrl(int $moveId): string
     {

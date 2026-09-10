@@ -231,6 +231,31 @@ class OdooService
      * factura de Mini-T, usando la config Odoo de su proveedor.
      * Devuelve el id de account.move creado o null (con lastError seteado).
      */
+    /**
+     * Resuelve la referencia que se enviará a Odoo para una factura, según la
+     * plantilla configurada en su proveedor (texto libre con variables).
+     * Si el proveedor no tiene plantilla, usa el número de factura.
+     */
+    public static function resolveReference(\App\Models\Invoice $invoice, ?\App\Models\InvoiceProvider $provider = null): string
+    {
+        $provider = $provider ?: \App\Models\InvoiceProvider::where('slug', $invoice->provider)->first();
+
+        $plantilla = trim((string) ($provider->odoo_ref_source ?? ''));
+
+        if ($plantilla === '') {
+            return $invoice->invoice_number ?: ($provider->name ?? $invoice->provider);
+        }
+
+        return strtr($plantilla, [
+            '{numero}'     => (string) ($invoice->invoice_number ?? ''),
+            '{servicio}'   => (string) ($invoice->service ?? ''),
+            '{referencia}' => (string) ($invoice->reference ?? ''),
+            '{dominio}'    => (string) ($invoice->reference ?? ''),
+            '{periodo}'    => (string) ($invoice->period ?? ''),
+            '{proveedor}'  => (string) ($provider->name ?? $invoice->provider),
+        ]);
+    }
+
     public function pushInvoice(\App\Models\Invoice $invoice): ?int
     {
         self::$lastError = null;
@@ -283,21 +308,8 @@ class OdooService
             $line['account_id'] = (int) $provider->odoo_account_id;
         }
 
-        // Referencia: texto libre configurado en el proveedor, con variables opcionales.
-        // Si está vacío, se usa el número de factura.
-        $plantillaRef = trim((string) ($provider->odoo_ref_source ?? ''));
-        if ($plantillaRef === '') {
-            $ref = $invoice->invoice_number ?: $provider->name;
-        } else {
-            $ref = strtr($plantillaRef, [
-                '{numero}'     => (string) ($invoice->invoice_number ?? ''),
-                '{servicio}'   => (string) ($invoice->service ?? ''),
-                '{referencia}' => (string) ($invoice->reference ?? ''),
-                '{dominio}'    => (string) ($invoice->reference ?? ''), // alias: el dominio se guarda en reference
-                '{periodo}'    => (string) ($invoice->period ?? ''),
-                '{proveedor}'  => (string) $provider->name,
-            ]);
-        }
+        // Referencia que irá a Odoo (según la plantilla del proveedor).
+        $ref = self::resolveReference($invoice, $provider);
 
         $values = [
             'move_type'    => 'in_invoice',

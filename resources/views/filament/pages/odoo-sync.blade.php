@@ -84,9 +84,9 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-gray-400 border-b border-gray-700">
-                        <th class="px-5 py-2">Mes</th>
                         <th class="px-5 py-2">Proveedor</th>
-                        <th class="px-5 py-2">Servicio / Referencia</th>
+                        <th class="px-5 py-2">Fecha</th>
+                        <th class="px-5 py-2">Referencia (Odoo)</th>
                         <th class="px-5 py-2 text-right">Monto</th>
                         <th class="px-5 py-2">Nº Factura</th>
                         <th class="px-5 py-2">Estado Odoo</th>
@@ -101,9 +101,9 @@
                             $rowBg = $cargada ? 'bg-green-500/5' : ($descartada ? 'opacity-50' : '');
                         @endphp
                         <tr class="border-b border-gray-800 hover:bg-gray-800/50 {{ $rowBg }}">
-                            <td class="px-5 py-2.5 text-gray-300">{{ $monthNames[$inv->month] ?? $inv->month }}</td>
                             <td class="px-5 py-2.5 text-gray-100 font-medium">{{ ucfirst($inv->provider) }}</td>
-                            <td class="px-5 py-2.5 text-gray-400">{{ $inv->service ?? $inv->reference ?? '—' }}</td>
+                            <td class="px-5 py-2.5 text-gray-300">{{ $inv->invoice_date?->format('d/m/Y') ?? '—' }}</td>
+                            <td class="px-5 py-2.5 text-amber-300">{{ $this->refFor($inv) ?: '—' }}</td>
                             <td class="px-5 py-2.5 text-right text-white">{{ number_format($inv->amount, 2, ',', '.') }} {{ $inv->currency }}</td>
                             <td class="px-5 py-2.5 text-gray-400">{{ $inv->invoice_number ?? '—' }}</td>
                             <td class="px-5 py-2.5">
