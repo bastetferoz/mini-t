@@ -100,7 +100,7 @@
                             $descartada = ! $cargada && $inv->odoo_dismissed;
                             $rowBg = $cargada ? 'bg-green-500/5' : ($descartada ? 'opacity-50' : '');
                         @endphp
-                        <tr class="border-b border-gray-800 hover:bg-gray-800/50 {{ $rowBg }}">
+                        <tr wire:key="odoo-inv-{{ $inv->id }}" class="border-b border-gray-800 hover:bg-gray-800/50 {{ $rowBg }}">
                             <td class="px-5 py-2.5 text-gray-100 font-medium">{{ ucfirst($inv->provider) }}</td>
                             <td class="px-5 py-2.5 text-gray-300">{{ $inv->invoice_date?->format('d/m/Y') ?? '—' }}</td>
                             <td class="px-5 py-2.5 text-amber-300">{{ $this->refFor($inv) ?: '—' }}</td>
