@@ -23,6 +23,9 @@ class OdooSync extends Page
 
     public ?int $year = null;
 
+    /** Filtro de estado: pending | loaded | dismissed | all */
+    public string $statusFilter = 'pending';
+
     public function mount(): void
     {
         $this->year = (int) now()->year;
@@ -49,8 +52,8 @@ class OdooSync extends Page
             ->get();
     }
 
-    /** Facturas de proveedores marcados para Odoo en el año seleccionado. */
-    public function getInvoices(): Collection
+    /** Todas las facturas de proveedores marcados para Odoo en el año (sin filtro de estado). */
+    public function getAllInvoices(): Collection
     {
         $slugs = $this->getOdooProviderSlugs();
 
@@ -64,6 +67,31 @@ class OdooSync extends Page
             ->orderByDesc('month')
             ->orderBy('provider')
             ->get();
+    }
+
+    /** Facturas a mostrar según el filtro de estado. */
+    public function getInvoices(): Collection
+    {
+        $all = $this->getAllInvoices();
+
+        return match ($this->statusFilter) {
+            'loaded'    => $all->filter(fn ($i) => (bool) $i->odoo_move_id),
+            'dismissed' => $all->filter(fn ($i) => ! $i->odoo_move_id && $i->odoo_dismissed),
+            'all'       => $all,
+            default     => $all->filter(fn ($i) => ! $i->odoo_move_id && ! $i->odoo_dismissed), // pending
+        };
+    }
+
+    /** Conteos por estado (para el selector). */
+    public function getCounts(): array
+    {
+        $all = $this->getAllInvoices();
+        return [
+            'pending'   => $all->filter(fn ($i) => ! $i->odoo_move_id && ! $i->odoo_dismissed)->count(),
+            'loaded'    => $all->filter(fn ($i) => (bool) $i->odoo_move_id)->count(),
+            'dismissed' => $all->filter(fn ($i) => ! $i->odoo_move_id && $i->odoo_dismissed)->count(),
+            'all'       => $all->count(),
+        ];
     }
 
     public function getYears(): array
@@ -120,10 +148,9 @@ class OdooSync extends Page
     /** Carga todas las pendientes del año seleccionado. */
     public function pushAll(): void
     {
-        // Solo las pendientes: sin cargar y no descartadas.
-        $pendientes = $this->getInvoices()
-            ->whereNull('odoo_move_id')
-            ->where('odoo_dismissed', false);
+        // Solo las pendientes: sin cargar y no descartadas (de todas, no del filtro actual).
+        $pendientes = $this->getAllInvoices()
+            ->filter(fn ($i) => ! $i->odoo_move_id && ! $i->odoo_dismissed);
 
         if ($pendientes->isEmpty()) {
             \Filament\Notifications\Notification::make()

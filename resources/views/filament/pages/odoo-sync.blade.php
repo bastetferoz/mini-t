@@ -38,20 +38,20 @@
 
     {{-- Facturas de esos proveedores --}}
     @php
-        $cargadas = $invoices->whereNotNull('odoo_move_id')->count();
-        $descartadas = $invoices->whereNull('odoo_move_id')->where('odoo_dismissed', true)->count();
-        $pendientes = $invoices->whereNull('odoo_move_id')->where('odoo_dismissed', false)->count();
+        $counts = $this->getCounts();
+        $pendientes = $counts['pending'];
     @endphp
     <div class="rounded-xl border border-gray-700 bg-gray-800/30 overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-700 flex items-center justify-between flex-wrap gap-2">
-            <h3 class="text-sm font-semibold text-white">
-                Facturas a cargar en Odoo
-                <span class="text-xs font-normal text-gray-500 ml-2">
-                    <span class="text-green-400">{{ $cargadas }} cargadas</span> ·
-                    <span class="text-amber-400">{{ $pendientes }} pendientes</span> ·
-                    <span class="text-gray-500">{{ $descartadas }} descartadas</span>
-                </span>
-            </h3>
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-sm font-semibold text-white mr-1">Facturas</h3>
+                @foreach(['pending' => 'Pendientes', 'loaded' => 'Cargadas', 'dismissed' => 'Descartadas', 'all' => 'Todas'] as $key => $label)
+                    <button wire:click="$set('statusFilter', '{{ $key }}')"
+                        class="text-xs rounded-lg border px-2.5 py-1 transition {{ $statusFilter === $key ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-gray-600 bg-gray-900 text-gray-400 hover:border-amber-400' }}">
+                        {{ $label }} ({{ $counts[$key] }})
+                    </button>
+                @endforeach
+            </div>
             <div class="flex items-center gap-3">
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-gray-400">Año</label>
@@ -73,7 +73,13 @@
         </div>
 
         @if($invoices->isEmpty())
-            <p class="text-sm text-gray-500 text-center py-8">No hay facturas de proveedores marcados para Odoo en {{ $year }}.</p>
+            <p class="text-sm text-gray-500 text-center py-8">
+                @if($statusFilter === 'pending')
+                    No hay facturas pendientes de cargar en Odoo en {{ $year }}. 🎉
+                @else
+                    No hay facturas en este filtro para {{ $year }}.
+                @endif
+            </p>
         @else
             <table class="w-full text-sm">
                 <thead>
