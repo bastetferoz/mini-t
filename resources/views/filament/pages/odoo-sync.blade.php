@@ -73,6 +73,30 @@
             </div>
         </div>
 
+        {{-- Barra de acciones en lote (aparece con selección) --}}
+        @if(count($selected) > 0)
+            <div class="px-5 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center gap-3 flex-wrap">
+                <span class="text-xs text-amber-300 font-medium">{{ count($selected) }} seleccionada(s)</span>
+                @if($statusFilter !== 'dismissed')
+                    <x-filament::button wire:click="dismissSelected" color="danger" size="xs"
+                        wire:confirm="¿Descartar las {{ count($selected) }} facturas seleccionadas?">
+                        Descartar seleccionadas
+                    </x-filament::button>
+                    <x-filament::button wire:click="pushSelected" color="info" size="xs"
+                        wire:confirm="¿Cargar en Odoo las {{ count($selected) }} seleccionadas?"
+                        wire:loading.attr="disabled" wire:target="pushSelected">
+                        <span wire:loading.remove wire:target="pushSelected">Cargar seleccionadas</span>
+                        <span wire:loading wire:target="pushSelected">Cargando...</span>
+                    </x-filament::button>
+                @else
+                    <x-filament::button wire:click="undismissSelected" color="warning" size="xs">
+                        Reactivar seleccionadas
+                    </x-filament::button>
+                @endif
+                <button wire:click="$set('selected', [])" class="text-xs text-gray-400 hover:text-gray-200 underline">Limpiar selección</button>
+            </div>
+        @endif
+
         @if($invoices->isEmpty())
             <p class="text-sm text-gray-500 text-center py-8">
                 @if($statusFilter === 'pending')
@@ -85,6 +109,11 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-gray-400 border-b border-gray-700">
+                        <th class="px-4 py-2 w-10">
+                            <input type="checkbox" wire:click="toggleSelectAll"
+                                @checked(count($selected) > 0 && count(array_diff($invoices->pluck('id')->map(fn($i)=>(int)$i)->all(), $selected)) === 0)
+                                class="rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-0" title="Seleccionar todas">
+                        </th>
                         <th class="px-5 py-2">Proveedor</th>
                         <th class="px-5 py-2">Fecha</th>
                         <th class="px-5 py-2">Referencia (Odoo)</th>
@@ -102,6 +131,10 @@
                             $rowBg = $cargada ? 'bg-green-500/5' : ($descartada ? 'opacity-50' : '');
                         @endphp
                         <tr wire:key="odoo-inv-{{ $inv->id }}" class="border-b border-gray-800 hover:bg-gray-800/50 {{ $rowBg }}">
+                            <td class="px-4 py-2.5">
+                                <input type="checkbox" wire:model.live="selected" value="{{ $inv->id }}"
+                                    class="rounded border-gray-600 bg-gray-900 text-amber-500 focus:ring-0">
+                            </td>
                             <td class="px-5 py-2.5 text-gray-100 font-medium">{{ ucfirst($inv->provider) }}</td>
                             <td class="px-5 py-2.5 text-gray-300">{{ $inv->invoice_date?->format('d/m/Y') ?? '—' }}</td>
                             <td class="px-5 py-2.5 text-amber-300">{{ $this->refFor($inv) ?: '—' }}</td>
@@ -152,7 +185,7 @@
                 </tbody>
                 <tfoot class="bg-gray-800/50">
                     <tr class="border-t border-gray-600">
-                        <td class="px-5 py-3 font-semibold text-white" colspan="3">Total ({{ $invoices->count() }} facturas)</td>
+                        <td class="px-5 py-3 font-semibold text-white" colspan="4">Total ({{ $invoices->count() }} facturas)</td>
                         <td class="px-5 py-3 text-right font-bold text-amber-400">{{ number_format($invoices->sum('amount'), 2, ',', '.') }}</td>
                         <td colspan="3"></td>
                     </tr>

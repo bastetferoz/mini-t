@@ -26,6 +26,9 @@ class OdooSync extends Page
     /** Filtro de estado: pending | loaded | dismissed | all */
     public string $statusFilter = 'pending';
 
+    /** IDs de facturas seleccionadas (checkboxes). */
+    public array $selected = [];
+
     public function mount(): void
     {
         $this->year = (int) now()->year;
@@ -228,6 +231,80 @@ class OdooSync extends Page
         if ($vinculadas > 0) {
             \App\Services\ActivityLogger::facturacion("🔗 Odoo: {$vinculadas} factura(s) detectadas como ya cargadas y vinculadas");
         }
+    }
+
+    /** Selecciona/deselecciona todas las facturas visibles del filtro actual. */
+    public function toggleSelectAll(): void
+    {
+        $visibles = $this->getInvoices()->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        // Si ya están todas seleccionadas, deseleccionar; si no, seleccionar todas.
+        $todasSeleccionadas = ! empty($visibles) && empty(array_diff($visibles, $this->selected));
+        $this->selected = $todasSeleccionadas ? [] : $visibles;
+    }
+
+    /** Descarta en lote las facturas seleccionadas (que no estén cargadas). */
+    public function dismissSelected(): void
+    {
+        if (empty($this->selected)) {
+            \Filament\Notifications\Notification::make()->title('No hay facturas seleccionadas')->warning()->send();
+            return;
+        }
+
+        $n = Invoice::whereIn('id', $this->selected)
+            ->whereNull('odoo_move_id')
+            ->update(['odoo_dismissed' => true]);
+
+        $this->selected = [];
+
+        \Filament\Notifications\Notification::make()
+            ->title("{$n} factura(s) descartada(s)")
+            ->success()->send();
+    }
+
+    /** Reactiva en lote las seleccionadas. */
+    public function undismissSelected(): void
+    {
+        if (empty($this->selected)) {
+            \Filament\Notifications\Notification::make()->title('No hay facturas seleccionadas')->warning()->send();
+            return;
+        }
+
+        $n = Invoice::whereIn('id', $this->selected)->update(['odoo_dismissed' => false]);
+        $this->selected = [];
+
+        \Filament\Notifications\Notification::make()
+            ->title("{$n} factura(s) reactivada(s)")
+            ->success()->send();
+    }
+
+    /** Carga en Odoo las facturas seleccionadas (borrador). */
+    public function pushSelected(): void
+    {
+        $ids = collect($this->selected);
+        if ($ids->isEmpty()) {
+            \Filament\Notifications\Notification::make()->title('No hay facturas seleccionadas')->warning()->send();
+            return;
+        }
+
+        $facturas = Invoice::whereIn('id', $ids)
+            ->whereNull('odoo_move_id')
+            ->where('odoo_dismissed', false)
+            ->get();
+
+        $odoo = new \App\Services\OdooService();
+        $ok = 0; $fail = 0;
+        foreach ($facturas as $invoice) {
+            $odoo->pushInvoice($invoice) ? $ok++ : $fail++;
+        }
+
+        $this->selected = [];
+
+        \Filament\Notifications\Notification::make()
+            ->title('Carga finalizada')
+            ->body("{$ok} cargada(s)" . ($fail > 0 ? ", {$fail} con error" : '') . '.')
+            ->color($fail > 0 ? 'warning' : 'success')
+            ->send();
     }
 
     /** Desestima una factura: marca que no se carga en Odoo. */
