@@ -7,13 +7,7 @@
         $monthNames = [1=>'Ene',2=>'Feb',3=>'Mar',4=>'Abr',5=>'May',6=>'Jun',7=>'Jul',8=>'Ago',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dic'];
     @endphp
 
-    {{-- Aviso de configuración pendiente --}}
-    <div class="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <p class="text-sm text-amber-300 flex items-center gap-2">
-            <x-heroicon-o-information-circle class="w-5 h-5" />
-            La conexión con Odoo todavía no está configurada. Por ahora podés marcar qué proveedores se cargan en Odoo (en Facturación → Proveedores, toggle "Cargar en Odoo") y ver acá sus facturas.
-        </p>
-    </div>
+
 
     {{-- Proveedores marcados para Odoo --}}
     <div class="mb-6 rounded-xl border border-gray-700 bg-gray-800/30 p-5">

@@ -33,13 +33,45 @@ class OdooService
 
     public function isConfigured(): bool
     {
-        return $this->url !== '' && $this->db !== '' && $this->username !== '' && $this->password !== '';
+        // La DB no es obligatoria: si está vacía, se autodetecta desde el servidor.
+        return $this->url !== '' && $this->username !== '' && $this->password !== '';
     }
 
     /** Devuelve la versión del servidor Odoo (no requiere credenciales). */
     public function version(): ?array
     {
         return $this->call("{$this->url}/xmlrpc/2/common", 'version', []);
+    }
+
+    /** Lista las bases de datos del servidor Odoo (no requiere credenciales). */
+    public function listDatabases(): array
+    {
+        $res = $this->call("{$this->url}/xmlrpc/2/db", 'list', []);
+        return is_array($res) ? $res : [];
+    }
+
+    /**
+     * Devuelve la base a usar. Si ODOO_DB está vacío, la autodetecta:
+     * si el servidor tiene una sola base, usa esa.
+     */
+    protected function resolveDb(): ?string
+    {
+        if ($this->db !== '') {
+            return $this->db;
+        }
+
+        $dbs = $this->listDatabases();
+        if (count($dbs) === 1) {
+            $this->db = (string) $dbs[0];
+            return $this->db;
+        }
+
+        if (count($dbs) === 0) {
+            self::$lastError = 'No se pudo obtener la base de datos de Odoo (¿URL correcta?).';
+        } else {
+            self::$lastError = 'El servidor Odoo tiene varias bases (' . implode(', ', $dbs) . '). Especificá ODOO_DB en el .env.';
+        }
+        return null;
     }
 
     /** Autentica y guarda el uid. Devuelve el uid o null si falla. */
@@ -50,12 +82,17 @@ class OdooService
         }
 
         if (! $this->isConfigured()) {
-            self::$lastError = 'Odoo no está configurado (ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD).';
+            self::$lastError = 'Odoo no está configurado (ODOO_URL, ODOO_USERNAME, ODOO_PASSWORD).';
             return null;
         }
 
+        $db = $this->resolveDb();
+        if (! $db) {
+            return null; // lastError ya seteado
+        }
+
         $result = $this->call("{$this->url}/xmlrpc/2/common", 'authenticate', [
-            $this->db, $this->username, $this->password, [],
+            $db, $this->username, $this->password, [],
         ]);
 
         // authenticate devuelve el uid (int) o false si las credenciales son inválidas.
