@@ -56,6 +56,13 @@
                     </select>
                 </div>
                 @if($pendientes > 0)
+                    <x-filament::button wire:click="verifyInOdoo" color="gray" icon="heroicon-o-magnifying-glass" size="sm"
+                        wire:loading.attr="disabled" wire:target="verifyInOdoo"
+                        title="Busca en Odoo cuáles pendientes ya están cargadas y las vincula">
+                        <span wire:loading.remove wire:target="verifyInOdoo">Verificar en Odoo</span>
+                        <span wire:loading wire:target="verifyInOdoo">Verificando...</span>
+                    </x-filament::button>
+
                     <x-filament::button wire:click="pushAll" color="success" icon="heroicon-o-arrow-up-tray" size="sm"
                         wire:confirm="¿Cargar {{ $pendientes }} factura(s) pendientes en Odoo (borrador)?"
                         wire:loading.attr="disabled" wire:target="pushAll">

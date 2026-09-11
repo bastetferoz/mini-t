@@ -164,6 +164,39 @@ class OdooService
         return is_array($res) ? $res : null;
     }
 
+    /**
+     * Busca en Odoo una factura de proveedor ya existente que corresponda a esta
+     * factura de Mini-T, matcheando por número de documento (ref o
+     * l10n_latam_document_number) y, si el proveedor tiene partner configurado,
+     * también por partner. Devuelve el id del account.move o null.
+     */
+    public function findExistingMove(\App\Models\Invoice $invoice): ?int
+    {
+        $numero = trim((string) $invoice->invoice_number);
+        if ($numero === '') {
+            return null;
+        }
+
+        // Partner del proveedor (si está configurado), para acotar la búsqueda.
+        $provider = \App\Models\InvoiceProvider::where('slug', $invoice->provider)->first();
+        $partnerId = $provider?->odoo_partner_id;
+
+        // Buscar facturas de proveedor cuyo número (ref o document_number) coincida.
+        $domain = [
+            ['move_type', '=', 'in_invoice'],
+            '|',
+            ['ref', '=', $numero],
+            ['l10n_latam_document_number', '=', $numero],
+        ];
+        if ($partnerId) {
+            $domain[] = ['partner_id', '=', (int) $partnerId];
+        }
+
+        $res = $this->searchRead('account.move', $domain, ['id'], 1);
+
+        return $res[0]['id'] ?? null;
+    }
+
     /** Diario de compras (facturas de proveedor) por defecto. */
     public const PURCHASE_JOURNAL_ID = 11;
 

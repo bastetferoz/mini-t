@@ -186,6 +186,50 @@ class OdooSync extends Page
         \App\Services\ActivityLogger::facturacion("📤 Odoo: carga masiva — {$ok} ok, {$fail} error");
     }
 
+    /**
+     * Verifica en Odoo cuáles de las pendientes ya existen (cargadas por otro
+     * medio) y las vincula, así dejan de aparecer como pendientes.
+     */
+    public function verifyInOdoo(): void
+    {
+        $pendientes = $this->getAllInvoices()
+            ->filter(fn ($i) => ! $i->odoo_move_id && ! $i->odoo_dismissed);
+
+        if ($pendientes->isEmpty()) {
+            \Filament\Notifications\Notification::make()
+                ->title('No hay pendientes para verificar')->warning()->send();
+            return;
+        }
+
+        $odoo = new \App\Services\OdooService();
+        if (! $odoo->authenticate()) {
+            \Filament\Notifications\Notification::make()
+                ->title('No se pudo conectar a Odoo')
+                ->body(\App\Services\OdooService::$lastError ?? 'Error de conexión.')
+                ->danger()->send();
+            return;
+        }
+
+        $vinculadas = 0;
+        foreach ($pendientes as $invoice) {
+            $moveId = $odoo->findExistingMove($invoice);
+            if ($moveId) {
+                $invoice->update(['odoo_move_id' => $moveId, 'odoo_synced_at' => now()]);
+                $vinculadas++;
+            }
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title('Verificación completada')
+            ->body("{$vinculadas} factura(s) ya estaban en Odoo y se vincularon.")
+            ->color($vinculadas > 0 ? 'success' : 'gray')
+            ->send();
+
+        if ($vinculadas > 0) {
+            \App\Services\ActivityLogger::facturacion("🔗 Odoo: {$vinculadas} factura(s) detectadas como ya cargadas y vinculadas");
+        }
+    }
+
     /** Desestima una factura: marca que no se carga en Odoo. */
     public function dismiss(int $invoiceId): void
     {
