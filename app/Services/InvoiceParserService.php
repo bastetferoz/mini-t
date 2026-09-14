@@ -348,8 +348,8 @@ PROMPT;
             return $provider->custom_prompt;
         }
 
-        // Prompt genérico
-        $currency = $provider?->default_currency ?? 'ARS';
+        // Prompt genérico. Moneda por defecto del proveedor (USD si no está definida).
+        $currency = $provider?->default_currency ?: 'USD';
 
         return <<<PROMPT
 Extraé los datos de esta factura en formato JSON estricto (sin texto adicional, solo JSON):
@@ -367,7 +367,7 @@ Extraé los datos de esta factura en formato JSON estricto (sin texto adicional,
 
 Reglas:
 - "amount": numérico, punto como separador decimal, sin puntos de miles.
-- "currency": "ARS" para pesos argentinos, "USD" para dólares.
+- "currency": "ARS" para pesos argentinos, "USD" para dólares. Si la factura no aclara claramente la moneda, usá "{$currency}".
 - "period": el MES DEL SERVICIO FACTURADO en formato YYYY-MM. Es el dato más importante: el sistema ubica la factura en este mes. Buscalo en la leyenda de la factura tipo "Summary for Mar 1, 2026 - Mar 31, 2026", "Billing period", "Período", "Servicios del mes de...". Si el período cruza dos meses (ej: "Feb 15 - Mar 14"), usá el mes donde cae la MAYOR parte de los días. Si la factura NO aclara ningún período de servicio, usá el mes de la fecha de emisión (invoice_date).
 - "invoice_date": la FECHA DE EMISIÓN de la factura (cuándo se emitió/facturó), en formato YYYY-MM-DD. No la confundas con el período de servicio.
 - "company": la empresa que PAGA/IMPUTA este gasto. Solo puede ser una de estas: "phinxlab", "novatech", "cryptopatagonia". Si la factura dice "Phinxlab", "Phinx", "Dinmax", "Velned", "Datanova", "Technology Advisors", "llanmetal", "dmxconsulting", "tradingwasp", "holapepper", "newiter" → es "phinxlab". Si dice "Nova", "Novatech", "Aganon", "nvt-usa", "palitocapital" → es "novatech". Si dice "Cryptopatagonia" → es "cryptopatagonia". Si no podés determinar, usá null.

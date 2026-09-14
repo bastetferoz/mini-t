@@ -18,6 +18,9 @@ use Filament\Forms\Components\TagsInput;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\BulkActionGroup;
 
 class InvoiceProviderResource extends Resource
 {
@@ -68,12 +71,13 @@ class InvoiceProviderResource extends Resource
                 ]),
 
             Select::make('default_currency')
-                ->label('Moneda habitual')
+                ->label('Moneda')
                 ->options([
-                    'ARS' => 'ARS (Pesos)',
                     'USD' => 'USD (Dólares)',
+                    'ARS' => 'ARS (Pesos)',
                 ])
-                ->default('USD'),
+                ->default('USD')
+                ->helperText('Por defecto USD. Cambiala a ARS si las facturas de este proveedor son en pesos.'),
 
             Select::make('company')
                 ->label('Gerencia')
@@ -208,6 +212,15 @@ class InvoiceProviderResource extends Resource
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make()
+                    ->requiresConfirmation()
+                    ->modalHeading('Eliminar proveedor')
+                    ->modalDescription('Se eliminará este proveedor. Las facturas ya cargadas no se borran, pero dejarán de estar asociadas a su configuración. ¿Continuar?'),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 
